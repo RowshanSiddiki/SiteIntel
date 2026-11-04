@@ -2,3 +2,7 @@ pkl_files/
 pkl_files/
 pkl_files/cement_demand_model.pkl
 .env
+__pycache__/
+*.py[cod]
+.venv/
+.env
