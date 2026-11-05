@@ -1,5 +1,7 @@
 import streamlit as st
 
+from frontend.api_client import APIError
+
 
 def apply_styles() -> None:
     st.markdown(
@@ -66,6 +68,11 @@ def render_brand(*, compact: bool = False) -> None:
 
 def show_api_error(error: Exception) -> None:
     st.error(str(error))
+    if isinstance(error, APIError) and isinstance(error.details, dict):
+        for field, message in error.details.items():
+            if isinstance(field, str) and isinstance(message, str):
+                label = field.replace("_", " ").strip().title()
+                st.error(f"{label}: {message}")
 
 
 def display_stats(stats: dict[str, object]) -> None:

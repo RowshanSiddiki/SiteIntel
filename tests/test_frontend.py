@@ -1,7 +1,10 @@
+from pathlib import Path
 import secrets
 import threading
 import unittest
+from unittest.mock import patch
 
+from streamlit.testing.v1 import AppTest
 from werkzeug.serving import make_server
 
 from backend.app import create_app
@@ -66,6 +69,60 @@ class APIClientIntegrationTests(unittest.TestCase):
             self.api.login(email="not-an-email", password="bad")
         self.assertEqual(error.exception.status_code, 400)
         self.assertEqual(error.exception.details["email"], "Enter a valid email address.")
+
+    def test_registration_validation_details_are_preserved(self):
+        with self.assertRaises(APIError) as error:
+            self.api.register(
+                full_name="A",
+                email="not-an-email",
+                password="short",
+                password_confirmation="short",
+            )
+        self.assertEqual(error.exception.status_code, 400)
+        self.assertEqual(str(error.exception), "Invalid registration data.")
+        self.assertIn("full_name", error.exception.details)
+        self.assertIn("email", error.exception.details)
+        self.assertIn("password", error.exception.details)
+
+    def test_duplicate_registration_has_clear_backend_message(self):
+        registration = {
+            "full_name": "Test User",
+            "email": "duplicate@example.com",
+            "password": "StrongPass123!",
+            "password_confirmation": "StrongPass123!",
+        }
+        self.api.register(**registration)
+        with self.assertRaises(APIError) as error:
+            self.api.register(**registration)
+        self.assertEqual(error.exception.status_code, 409)
+        self.assertEqual(
+            str(error.exception), "An account with this email already exists."
+        )
+
+    def test_registration_page_displays_validation_details(self):
+        error = APIError(
+            "Invalid registration data.",
+            status_code=400,
+            details={"password": "Password must be between 12 and 128 characters."},
+        )
+        app_path = Path(__file__).resolve().parents[1] / "frontend" / "app.py"
+        with patch.object(APIClient, "register", side_effect=error):
+            app_test = AppTest.from_file(str(app_path)).run()
+            app_test.sidebar.button[1].click().run()
+            for element, value in zip(
+                app_test.text_input,
+                ["Test User", "valid@example.com", "short", "short"],
+                strict=True,
+            ):
+                element.set_value(value)
+            app_test.form_submit_button[0].click().run()
+
+        self.assertFalse(app_test.exception)
+        self.assertIn("Invalid registration data.", [item.value for item in app_test.error])
+        self.assertIn(
+            "Password: Password must be between 12 and 128 characters.",
+            [item.value for item in app_test.error],
+        )
 
     def test_dashboard_does_not_invent_unavailable_statistics(self):
         with self.assertRaises(APIError) as error:
