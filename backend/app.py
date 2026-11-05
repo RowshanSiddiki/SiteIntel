@@ -19,11 +19,24 @@ def create_app(test_config: Optional[Mapping[str, object]] = None) -> Flask:
     if not app.config.get("SQLALCHEMY_DATABASE_URI"):
         app.config["SQLALCHEMY_DATABASE_URI"] = Config.database_uri()
 
+    from backend.modules.agent import assistant_bp
+    from backend.modules.auth import auth_bp
+    from backend.shared.security import configure_security
+
+    configure_security(app)
     db.init_app(app)
     migrate.init_app(app, db)
+    app.extensions["siteintel_retrieval_providers"] = app.config.get(
+        "AGENT_RETRIEVAL_PROVIDERS", {}
+    )
 
-    for blueprint in app.config.get("BLUEPRINTS", ()):
-        app.register_blueprint(blueprint)
+    for blueprint in (
+        auth_bp,
+        assistant_bp,
+        *app.config.get("BLUEPRINTS", ()),
+    ):
+        if blueprint.name not in app.blueprints:
+            app.register_blueprint(blueprint)
 
     @app.get("/health")
     def health():
