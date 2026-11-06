@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Form expired · SiteIntel{% endblock %}
+{% block content %}
+<section class="error-card">
+  <p class="eyebrow">SECURITY CHECK</p>
+  <h1>This form could not be verified.</h1>
+  <p>{{ reason }} Reload the page and submit the form again.</p>
+  <a class="button button-primary" href="{{ url_for('auth.login') }}">Return to login</a>
+</section>
+{% endblock %}

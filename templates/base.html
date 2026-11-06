@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#10251f">
+    <title>{% block title %}SiteIntel{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/siteintel.css') }}">
+    <script defer src="{{ url_for('static', filename='js/auth.js') }}"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="{{ url_for('index') }}" aria-label="SiteIntel home">
+        <span class="brand-mark" aria-hidden="true">S</span>
+        <span>Site<span class="brand-accent">Intel</span></span>
+      </a>
+      {% if current_user.is_authenticated %}
+        <form action="{{ url_for('auth.logout') }}" method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="button button-outline" type="submit">Log out</button>
+        </form>
+      {% endif %}
+    </header>
+    <main class="page-shell">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <section class="flash-stack" aria-live="polite">
+            {% for category, message in messages %}
+              <p class="flash flash-{{ category }}">{{ message }}</p>
+            {% endfor %}
+          </section>
+        {% endif %}
+      {% endwith %}
+      {% block content %}{% endblock %}
+    </main>
+    <footer class="footer">SiteIntel · Construction intelligence workspace</footer>
+  </body>
+</html>

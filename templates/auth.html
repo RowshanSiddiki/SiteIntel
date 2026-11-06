@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% set is_register = active_tab == "register" %}
+{% block title %}{{ "Create account" if is_register else "Log in" }} · SiteIntel{% endblock %}
+{% block content %}
+<section class="auth-layout">
+  <div class="auth-intro">
+    <p class="eyebrow">Construction intelligence</p>
+    <h1>Build with a clearer view.</h1>
+    <p class="intro-copy">A secure workspace for the people, plans, and decisions behind every project.</p>
+    <div class="intro-note">
+      <span class="status-dot" aria-hidden="true"></span>
+      <span>One secure workspace, built for construction teams.</span>
+    </div>
+  </div>
+  <section class="auth-card" aria-labelledby="auth-heading">
+    <div class="auth-tabs" role="tablist" aria-label="Account options">
+      <a class="auth-tab {{ 'active' if is_register else '' }}"
+         href="{{ url_for('auth.register') }}"
+         {% if is_register %}aria-current="page"{% endif %}>Register</a>
+      <a class="auth-tab {{ 'active' if not is_register else '' }}"
+         href="{{ url_for('auth.login') }}"
+         {% if not is_register %}aria-current="page"{% endif %}>Login</a>
+    </div>
+    <div class="form-heading">
+      <p class="eyebrow">{{ "GET STARTED" if is_register else "WELCOME BACK" }}</p>
+      <h2 id="auth-heading">{{ "Create your account" if is_register else "Log in to SiteIntel" }}</h2>
+      <p>{{ "Register to access your construction workspace." if is_register else "Enter your credentials to continue." }}</p>
+    </div>
+    <form method="post"
+          action="{{ url_for('auth.register' if is_register else 'auth.login') }}"
+          data-auth-form
+          data-register="{{ 'true' if is_register else 'false' }}"
+          novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% if is_register %}
+        <label for="full_name">Full name</label>
+        <input id="full_name" name="full_name" type="text" autocomplete="name"
+               minlength="2" maxlength="120" required
+               value="{{ full_name|default('') }}" placeholder="Your full name">
+      {% endif %}
+      <label for="email">Email address</label>
+      <input id="email" name="email" type="email" autocomplete="email"
+             maxlength="254" required value="{{ email|default('') }}"
+             placeholder="you@example.com">
+      <label for="password">Password</label>
+      <input id="password" name="password"
+             type="password" autocomplete="{{ 'new-password' if is_register else 'current-password' }}"
+             minlength="{{ 12 if is_register else 1 }}" maxlength="128" required
+             placeholder="{{ 'At least 12 characters' if is_register else 'Your password' }}">
+      {% if is_register %}
+        <p class="field-help">Use at least 12 characters and three character types: lowercase, uppercase, number, or symbol.</p>
+        <label for="password_confirmation">Confirm password</label>
+        <input id="password_confirmation" name="password_confirmation"
+               type="password" autocomplete="new-password" minlength="12"
+               maxlength="128" required placeholder="Re-enter your password">
+      {% endif %}
+      <p class="form-validation" data-validation-message role="alert"></p>
+      <button class="button button-primary button-full" type="submit">
+        {{ "Create account" if is_register else "Login" }}
+      </button>
+    </form>
+    <p class="auth-switch">
+      {% if is_register %}
+        Already have an account? <a href="{{ url_for('auth.login') }}">Log in</a>
+      {% else %}
+        New to SiteIntel? <a href="{{ url_for('auth.register') }}">Create an account</a>
+      {% endif %}
+    </p>
+  </section>
+</section>
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · SiteIntel{% endblock %}
+{% block content %}
+<section class="dashboard">
+  <p class="eyebrow">YOUR WORKSPACE</p>
+  <h1>Welcome, {{ user.full_name }}</h1>
+  <p class="intro-copy">Your SiteIntel account is ready.</p>
+  <section class="account-card" aria-labelledby="account-heading">
+    <div class="account-card-heading">
+      <div>
+        <p class="eyebrow">ACCOUNT</p>
+        <h2 id="account-heading">Profile information</h2>
+      </div>
+      <span class="account-avatar" aria-hidden="true">{{ user.full_name[:1]|upper }}</span>
+    </div>
+    <dl class="account-details">
+      <div><dt>Full name</dt><dd>{{ user.full_name }}</dd></div>
+      <div><dt>Email address</dt><dd>{{ user.email }}</dd></div>
+      <div><dt>Account ID</dt><dd>{{ user.id }}</dd></div>
+      <div>
+        <dt>Member since</dt>
+        <dd>{{ user.created_at.strftime("%B %d, %Y") if user.created_at else "—" }}</dd>
+      </div>
+    </dl>
+  </section>
+  <section class="next-steps">
+    <span class="next-icon" aria-hidden="true">↗</span>
+    <div><h2>More project intelligence is coming</h2><p>This secure foundation is ready to grow with your construction workflows.</p></div>
+  </section>
+</section>
+{% endblock %}
