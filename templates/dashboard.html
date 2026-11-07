@@ -27,5 +27,62 @@
     <span class="next-icon" aria-hidden="true">↗</span>
     <div><h2>More project intelligence is coming</h2><p>This secure foundation is ready to grow with your construction workflows.</p></div>
   </section>
+
+  <section class="report-panel" aria-labelledby="daily-report-heading">
+    <div class="report-panel-heading">
+      <p class="eyebrow">FIELD REPORTS</p>
+      <h2 id="daily-report-heading">Daily Construction Report</h2>
+      <p>Upload a JPG or PNG report image. SiteIntel will extract readable text and prepare inputs for the available prediction models.</p>
+    </div>
+
+    <form id="report-upload-form" class="report-upload-form" novalidate>
+      <label for="report-image">Construction report image</label>
+      <input id="report-image" name="image" type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" required>
+      <p class="field-help">JPG, JPEG, or PNG · Maximum 10 MB. Clear printed text works best; handwriting recognition depends on legibility.</p>
+      <div id="report-preview-wrap" class="report-preview-wrap" hidden>
+        <img id="report-preview" class="report-preview" alt="Preview of the selected construction report">
+      </div>
+      <p id="report-error" class="report-message report-error" role="alert" hidden></p>
+      <button id="extract-report-button" class="button button-primary" type="submit" disabled>Extract Information</button>
+      <span id="extract-report-loading" class="loading-message" role="status" hidden>Extracting report information…</span>
+    </form>
+
+    <section id="report-results" class="report-results" aria-live="polite" hidden>
+      <div class="report-results-heading">
+        <div>
+          <p class="eyebrow">OCR RESULTS</p>
+          <h3>Extracted information</h3>
+        </div>
+      </div>
+      <p id="ocr-empty-message" class="field-help" hidden>No readable text was detected. Try a sharper, well-lit image.</p>
+      <div id="extracted-information" class="extracted-groups"></div>
+      <details class="ocr-text-details">
+        <summary>View original extracted text</summary>
+        <pre id="original-extracted-text"></pre>
+      </details>
+
+      <div class="model-readiness-grid">
+        <article class="model-readiness-card" aria-labelledby="workforce-readiness-title">
+          <p class="eyebrow">MODEL 1</p>
+          <h3 id="workforce-readiness-title">Workforce Attendance Risk</h3>
+          <p id="workforce-readiness-message" class="readiness-message"></p>
+          <ul id="workforce-missing-fields" class="missing-fields"></ul>
+          <button id="predict-workforce-button" class="button button-primary" type="button" disabled>Predict Workforce Attendance Risk</button>
+          <p id="workforce-result" class="prediction-result" role="status" hidden></p>
+        </article>
+        <article class="model-readiness-card" aria-labelledby="supply-readiness-title">
+          <p class="eyebrow">MODEL 2</p>
+          <h3 id="supply-readiness-title">Supply Chain Stockout Risk</h3>
+          <p id="supply-readiness-message" class="readiness-message"></p>
+          <ul id="supply-missing-fields" class="missing-fields"></ul>
+          <button id="predict-supply-button" class="button button-primary" type="button" disabled>Predict Supply Chain Stockout Risk</button>
+          <p id="supply-result" class="prediction-result" role="status" hidden></p>
+        </article>
+      </div>
+    </section>
+  </section>
 </section>
+{% endblock %}
+{% block page_scripts %}
+  <script defer src="{{ url_for('static', filename='js/report.js') }}"></script>
 {% endblock %}

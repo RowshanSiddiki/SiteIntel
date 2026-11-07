@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#10251f">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}SiteIntel{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/siteintel.css') }}">
     <script defer src="{{ url_for('static', filename='js/auth.js') }}"></script>
@@ -34,5 +35,6 @@
       {% block content %}{% endblock %}
     </main>
     <footer class="footer">SiteIntel · Construction intelligence workspace</footer>
+    {% block page_scripts %}{% endblock %}
   </body>
 </html>

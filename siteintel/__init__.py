@@ -1,12 +1,22 @@
 from typing import Mapping
 
 import click
-from flask import Flask, current_app, redirect, render_template, url_for
+from flask import (
+    Flask,
+    current_app,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 from flask_wtf.csrf import CSRFError
 from sqlalchemy.exc import SQLAlchemyError
+from werkzeug.exceptions import RequestEntityTooLarge
 
 from siteintel.config import Config
 from siteintel.extensions import csrf, db, login_manager
+from siteintel.reports.model_registry import load_model_registry
 
 
 def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
@@ -28,6 +38,10 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
         )
     if not app.config.get("SQLALCHEMY_DATABASE_URI"):
         app.config["SQLALCHEMY_DATABASE_URI"] = Config.database_uri()
+    app.config["MAX_CONTENT_LENGTH"] = (
+        app.config.get("MAX_CONTENT_LENGTH") or 10 * 1024 * 1024
+    )
+    app.extensions["siteintel_model_registry"] = load_model_registry()
 
     db.init_app(app)
     csrf.init_app(app)
@@ -35,9 +49,11 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
 
     from siteintel.auth import auth_bp
     from siteintel.dashboard import dashboard_bp
+    from siteintel.reports import reports_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
+    app.register_blueprint(reports_bp)
 
     @app.get("/")
     def index():
@@ -49,11 +65,42 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
 
     @app.errorhandler(CSRFError)
     def handle_csrf_error(error: CSRFError):
+        if request.path.startswith("/api/"):
+            return jsonify(
+                {
+                    "error": {
+                        "code": "csrf_failed",
+                        "message": error.description,
+                    }
+                }
+            ), 400
         return render_template("errors/csrf.html", reason=error.description), 400
+
+    @app.errorhandler(RequestEntityTooLarge)
+    def handle_request_too_large(error: RequestEntityTooLarge):
+        current_app.logger.info(
+            "Request exceeded the configured size limit (%s).",
+            type(error).__name__,
+        )
+        if request.path.startswith("/api/"):
+            return jsonify(
+                {
+                    "error": {
+                        "code": "image_too_large",
+                        "message": "The image exceeds the maximum upload size.",
+                    }
+                }
+            ), 413
+        return render_template(
+            "errors/500.html",
+            message="The uploaded file exceeds the maximum allowed size.",
+        ), 413
 
     @app.errorhandler(SQLAlchemyError)
     def handle_database_error(error: SQLAlchemyError):
-        current_app.logger.exception("Database operation failed")
+        current_app.logger.exception(
+            "Database operation failed (%s)", type(error).__name__
+        )
         db.session.rollback()
         return (
             render_template(
