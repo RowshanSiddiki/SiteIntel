@@ -77,6 +77,38 @@ FIELD_ALIASES: dict[str, tuple[str, ...]] = {
     "Unit_Cost": ("unit cost", "cost per unit"),
     "Unit_Price": ("unit price", "price per unit"),
     "Promotion_Flag": ("promotion flag", "promotion", "promo"),
+    "Material_Cost": ("material cost", "materials cost", "materials total"),
+    "Labor_Cost": ("labor cost", "labour cost", "labor total", "labour total"),
+    "Profit_Rate": ("profit rate", "profit percentage", "margin rate"),
+    "Discount_or_Markup": (
+        "discount or markup",
+        "discount",
+        "markup",
+        "discount markup",
+    ),
+    "Policy_Reason": ("policy reason", "pricing reason"),
+    "Certificates": ("certificates", "certificate count"),
+    "Years of Experience": ("years of experience", "experience years"),
+    "Time Arrival Strafe": ("time arrival strafe",),
+    "Project Cost": ("project cost", "project budget"),
+    "Project Proximity": ("project proximity",),
+    "Violation Risk Index": ("violation risk index",),
+    "Company PCAB Score": ("company pcab score", "pcab score"),
+    "Weekly Overtime Hours": ("weekly overtime hours", "weekly overtime"),
+    "Salary Bracket": ("salary bracket",),
+    "site_id": ("site id", "construction site id"),
+    "cement_type": ("cement type",),
+    "planned_pour_tonnes": ("planned pour tonnes", "planned pour"),
+    "rain_mm": ("rain mm", "rainfall mm", "rainfall"),
+    "avg_temp_c": ("avg temp c", "average temperature c", "temperature c"),
+    "week_of_year": ("week of year", "week number"),
+    "day_of_week": ("day of week", "weekday"),
+    "quarter": ("quarter",),
+    "site_demand_lag_1": ("site demand lag 1", "previous day site demand"),
+    "site_demand_lag_7": ("site demand lag 7", "site demand 7 days ago"),
+    "site_demand_lag_14": ("site demand lag 14", "site demand 14 days ago"),
+    "site_rolling_mean_7": ("site rolling mean 7", "7 day site demand average"),
+    "site_rolling_mean_30": ("site rolling mean 30", "30 day site demand average"),
 }
 
 WORKFORCE_REQUIRED = ("work_date", "attendance_status")
@@ -326,10 +358,18 @@ def extract_report_fields(
     supply_features: tuple[str, ...],
     supply_numeric: frozenset[str],
     ocr_lines: list[dict[str, Any]] | None = None,
+    additional_models: dict[
+        str, tuple[tuple[str, ...], frozenset[str]]
+    ] | None = None,
 ) -> dict[str, Any]:
     workforce_raw = _extract_labeled_values(text, workforce_features)
     supply_raw = _extract_labeled_values(text, supply_features)
+    additional_raw = {
+        model_key: _extract_labeled_values(text, schema[0])
+        for model_key, schema in (additional_models or {}).items()
+    }
     ambiguities = {"workforce": False, "supply_chain": False}
+    ambiguities.update({model_key: False for model_key in additional_raw})
     if ocr_lines:
         workforce_tables, ambiguities["workforce"] = _extract_table_values(
             ocr_lines, workforce_features
@@ -341,12 +381,30 @@ def extract_report_fields(
             workforce_raw.setdefault(field, value)
         for field, value in supply_tables.items():
             supply_raw.setdefault(field, value)
+        for model_key, schema in (additional_models or {}).items():
+            table_values, ambiguities[model_key] = _extract_table_values(
+                ocr_lines, schema[0]
+            )
+            for field, value in table_values.items():
+                additional_raw[model_key].setdefault(field, value)
 
     report_date_raw = (
         workforce_raw.get("report_date")
         or supply_raw.get("report_date")
         or workforce_raw.get("work_date")
         or supply_raw.get("work_date")
+        or next(
+            (
+                raw_values.get("report_date")
+                or raw_values.get("date")
+                or raw_values.get("work_date")
+                for raw_values in additional_raw.values()
+                if raw_values.get("report_date")
+                or raw_values.get("date")
+                or raw_values.get("work_date")
+            ),
+            None,
+        )
     )
     parsed_date = _parse_date(report_date_raw) if report_date_raw else None
 
@@ -354,6 +412,10 @@ def extract_report_fields(
         field: None for field in workforce_features if field not in WORKFORCE_FORBIDDEN
     }
     supply: dict[str, Any] = {field: None for field in supply_features}
+    additional: dict[str, dict[str, Any]] = {
+        model_key: {field: None for field in schema[0]}
+        for model_key, schema in (additional_models or {}).items()
+    }
 
     for field, raw_value in workforce_raw.items():
         if field in workforce and field != "report_date":
@@ -361,6 +423,16 @@ def extract_report_fields(
     for field, raw_value in supply_raw.items():
         if field in supply and field != "report_date":
             supply[field] = _typed_value(field, raw_value, supply_numeric)
+    for model_key, values in additional_raw.items():
+        numeric_features = (additional_models or {})[model_key][1]
+        for field, raw_value in values.items():
+            if field in additional[model_key] and field not in {
+                "report_date",
+                "date",
+            }:
+                additional[model_key][field] = _typed_value(
+                    field, raw_value, numeric_features
+                )
 
     if parsed_date:
         iso_date = _display_date(parsed_date)
@@ -386,6 +458,15 @@ def extract_report_fields(
                 "date_dayofweek": parsed_date.weekday(),
             }
         )
+        for model_values in additional.values():
+            if "date_year" in model_values:
+                model_values["date_year"] = parsed_date.year
+            if "date_month" in model_values:
+                model_values["date_month"] = parsed_date.month
+            if "date_day" in model_values:
+                model_values["date_day"] = parsed_date.day
+            if "date_dayofweek" in model_values:
+                model_values["date_dayofweek"] = parsed_date.weekday()
 
     scheduled_start = _parse_time(str(workforce.get("scheduled_start_time") or ""))
     scheduled_end = _parse_time(str(workforce.get("scheduled_end_time") or ""))
@@ -442,6 +523,7 @@ def extract_report_fields(
         "report_date": report_date_raw,
         "workforce": workforce,
         "supply_chain": supply,
+        **additional,
         "ambiguities": ambiguities,
     }
 
@@ -453,6 +535,7 @@ def calculate_readiness(
     workforce_issue: str | None,
     supply_available: bool,
     supply_issue: str | None,
+    additional_model_status: dict[str, tuple[bool, str | None]] | None = None,
 ) -> dict[str, dict[str, Any]]:
     workforce = fields["workforce"]
     missing_workforce = [
@@ -482,12 +565,19 @@ def calculate_readiness(
         else None
     )
 
-    return {
+    readiness = {
         "workforce": {
             "data_ready": not missing_workforce and workforce_data_issue is None,
             "missing_fields": missing_workforce,
+            "required_features": list(workforce),
+            "available_inputs": {
+                field: value
+                for field, value in workforce.items()
+                if value is not None and value != ""
+            },
             "data_issue": workforce_data_issue,
             "model_available": workforce_available,
+            "model_status": "available" if workforce_available else "unavailable",
             "model_issue": workforce_issue,
             "prediction_enabled": (
                 not missing_workforce
@@ -498,14 +588,79 @@ def calculate_readiness(
         "supply_chain": {
             "data_ready": not missing_supply and supply_data_issue is None,
             "missing_fields": missing_supply,
+            "required_features": list(supply),
+            "available_inputs": {
+                field: value
+                for field, value in supply.items()
+                if value is not None and value != ""
+            },
             "data_issue": supply_data_issue,
             "model_available": supply_available,
+            "model_status": "available" if supply_available else "unavailable",
             "model_issue": supply_issue,
             "prediction_enabled": (
                 not missing_supply and supply_data_issue is None and supply_available
             ),
         },
     }
+    warnings = {
+        "construction_estimate": (
+            "This model uses material cost, labor cost, profit rate, discount or "
+            "markup, and policy reason to estimate Total_Estimate. Because its "
+            "component costs directly determine the target in the training data, "
+            "this is not an independent cost estimate. The dataset does not "
+            "document a currency or unit."
+        ),
+        "civil_risk": (
+            "This is a model-based project assessment, not a definitive judgment. "
+            "The model includes age and experience; do not use it for automated "
+            "employment or other consequential decisions."
+        ),
+        "cement_demand": (
+            "This is the model's estimated consumption for the supplied date and "
+            "inputs, not a guaranteed future demand value. In the checked-in "
+            "training dataset, consumed_tonnes exactly equals planned_pour_tonnes "
+            "in 19,195 of 31,980 rows, which may limit model reliability."
+        ),
+    }
+    for model_key, (model_available, model_issue) in (
+        additional_model_status or {}
+    ).items():
+        model_values = fields[model_key]
+        missing_fields = [
+            feature for feature, value in model_values.items() if value is None
+        ]
+        ambiguous = fields.get("ambiguities", {}).get(model_key, False)
+        if not model_values:
+            data_issue = (
+                "Model input feature metadata is unavailable; readiness cannot "
+                "be evaluated."
+            )
+        elif ambiguous:
+            data_issue = (
+                "Multiple records for this model were detected; the report must "
+                "identify one record before a single prediction can be prepared."
+            )
+        else:
+            data_issue = None
+        data_ready = bool(model_values) and not missing_fields and data_issue is None
+        readiness[model_key] = {
+            "data_ready": data_ready,
+            "missing_fields": missing_fields,
+            "required_features": list(model_values),
+            "available_inputs": {
+                field: value
+                for field, value in model_values.items()
+                if value is not None and value != ""
+            },
+            "data_issue": data_issue,
+            "model_available": model_available,
+            "model_status": "available" if model_available else "unavailable",
+            "model_issue": model_issue,
+            "model_warning": warnings.get(model_key),
+            "prediction_enabled": data_ready and model_available,
+        }
+    return readiness
 
 
 def feature_groups(fields: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -519,8 +674,19 @@ def feature_groups(fields: dict[str, Any]) -> dict[str, dict[str, Any]]:
         for key, value in fields["supply_chain"].items()
         if value is not None
     }
-    return {
+    groups = {
         "report": {"report_date": fields.get("report_date")},
         "workforce": workforce,
         "supply_chain": supply,
     }
+    for model_key in (
+        "construction_estimate",
+        "civil_risk",
+        "cement_demand",
+    ):
+        values = fields.get(model_key)
+        if values is not None:
+            groups[model_key] = {
+                key: value for key, value in values.items() if value is not None
+            }
+    return groups

@@ -15,6 +15,68 @@
   let previewUrl = null;
   let reportId = null;
   let readiness = null;
+  const modelUi = {
+    workforce: {
+      endpoint: "workforce",
+      button: "#predict-workforce-button",
+      modelStatus: "#workforce-model-status",
+      message: "#workforce-readiness-message",
+      features: "#workforce-required-fields",
+      extracted: "#workforce-extracted-fields",
+      missing: "#workforce-missing-fields",
+      result: "#workforce-result",
+      error: "#workforce-error",
+      label: "Predict Workforce Attendance Risk",
+    },
+    supply_chain: {
+      endpoint: "supply-chain",
+      button: "#predict-supply-button",
+      modelStatus: "#supply-model-status",
+      message: "#supply-readiness-message",
+      features: "#supply-required-fields",
+      extracted: "#supply-extracted-fields",
+      missing: "#supply-missing-fields",
+      result: "#supply-result",
+      error: "#supply-error",
+      label: "Predict Supply Chain Stockout Risk",
+    },
+    construction_estimate: {
+      endpoint: "construction-estimate",
+      button: "#predict-construction-estimate-button",
+      modelStatus: "#construction-estimate-model-status",
+      message: "#construction-estimate-readiness-message",
+      features: "#construction-estimate-required-fields",
+      extracted: "#construction-estimate-extracted-fields",
+      missing: "#construction-estimate-missing-fields",
+      result: "#construction-estimate-result",
+      error: "#construction-estimate-error",
+      label: "Predict Construction Cost",
+    },
+    civil_risk: {
+      endpoint: "civil-risk",
+      button: "#predict-civil-risk-button",
+      modelStatus: "#civil-risk-model-status",
+      message: "#civil-risk-readiness-message",
+      features: "#civil-risk-required-fields",
+      extracted: "#civil-risk-extracted-fields",
+      missing: "#civil-risk-missing-fields",
+      result: "#civil-risk-result",
+      error: "#civil-risk-error",
+      label: "Predict Civil Project Risk",
+    },
+    cement_demand: {
+      endpoint: "cement-demand",
+      button: "#predict-cement-demand-button",
+      modelStatus: "#cement-demand-model-status",
+      message: "#cement-demand-readiness-message",
+      features: "#cement-demand-required-fields",
+      extracted: "#cement-demand-extracted-fields",
+      missing: "#cement-demand-missing-fields",
+      result: "#cement-demand-result",
+      error: "#cement-demand-error",
+      label: "Predict Cement Demand",
+    },
+  };
 
   const fieldLabel = (name) =>
     name
@@ -85,17 +147,80 @@
     }
   };
 
-  const renderReadiness = (key, status, buttonSelector, messageSelector, listSelector, resultSelector) => {
-    const button = document.querySelector(buttonSelector);
-    const message = document.querySelector(messageSelector);
-    const missingList = document.querySelector(listSelector);
-    const result = document.querySelector(resultSelector);
+  const renderReadiness = (key, status) => {
+    const config = modelUi[key];
+    if (!config) return;
+    const button = document.querySelector(config.button);
+    const modelStatus = document.querySelector(config.modelStatus);
+    const message = document.querySelector(config.message);
+    const featuresList = document.querySelector(config.features);
+    const extractedList = document.querySelector(config.extracted);
+    const missingList = document.querySelector(config.missing);
+    const result = document.querySelector(config.result);
+    const error = document.querySelector(config.error);
+    if (!button || !message || !missingList || !result) {
+      if (button) button.disabled = true;
+      if (message) {
+        message.textContent =
+          "The model card is incomplete. Reload the dashboard and try again.";
+      }
+      return;
+    }
+    status ||= {
+      data_ready: false,
+      missing_fields: [],
+      required_features: [],
+      available_inputs: {},
+      model_available: false,
+      model_loaded: false,
+      model_issue:
+        "The extraction response did not include readiness for this model.",
+      prediction_enabled: false,
+    };
     result.hidden = true;
     result.textContent = "";
+    if (error) {
+      error.hidden = true;
+      error.textContent = "";
+    }
     missingList.replaceChildren();
+    if (featuresList) {
+      featuresList.replaceChildren();
+      for (const feature of status.required_features || []) {
+        const item = document.createElement("li");
+        item.textContent = feature;
+        featuresList.append(item);
+      }
+    }
+    if (extractedList) {
+      extractedList.replaceChildren();
+      const inputs = status.available_inputs || {};
+      for (const [feature, value] of Object.entries(inputs)) {
+        const item = document.createElement("li");
+        item.textContent = `${feature}: ${String(value)}`;
+        extractedList.append(item);
+      }
+      if (!Object.keys(inputs).length) {
+        const item = document.createElement("li");
+        item.textContent = "No model input values were extracted.";
+        extractedList.append(item);
+      }
+    }
 
+    if (modelStatus) {
+      const modelFile = status.model_file || key;
+      if (status.model_available) {
+        modelStatus.textContent = `Model loaded and ready: ${modelFile}`;
+      } else if (status.model_loaded) {
+        modelStatus.textContent = `Model loaded, but prediction is unavailable: ${status.model_issue || "model validation failed"}`;
+      } else {
+        modelStatus.textContent = `Model unavailable: ${status.model_issue || modelFile}`;
+      }
+    }
+
+    message.replaceChildren();
     if (!status.data_ready) {
-      message.textContent = "More report information is needed for this model.";
+      message.append("More report information is needed for this model.");
       for (const field of status.missing_fields || []) {
         const item = document.createElement("li");
         item.textContent = field.startsWith("one of:")
@@ -104,33 +229,58 @@
         missingList.append(item);
       }
     } else {
-      message.textContent = "The report contains the required information.";
+      message.append("The report contains the required information.");
     }
-    if (status.data_issue) {
+    if (status.data_issue || status.model_warning) {
       const dataIssue = document.createElement("p");
       dataIssue.className = "report-data-warning";
-      dataIssue.textContent = status.data_issue;
+      dataIssue.textContent = [status.data_issue, status.model_warning]
+        .filter(Boolean)
+        .join(" ");
       message.append(dataIssue);
-    }
-    if (!status.model_available && status.model_issue) {
-      const modelIssue = document.createElement("p");
-      modelIssue.className = "model-availability-warning";
-      modelIssue.textContent = `Prediction is unavailable: ${status.model_issue}`;
-      message.append(modelIssue);
     }
     button.disabled = !status.prediction_enabled;
     button.dataset.model = key;
   };
 
-  const displayPrediction = (element, modelKey, prediction) => {
+  const displayPrediction = (element, modelKey, response) => {
+    const prediction = response.prediction;
     if (modelKey === "workforce") {
       element.textContent = `Predicted workforce attendance risk: ${prediction}.`;
-    } else {
+    } else if (modelKey === "supply_chain") {
       const label =
         Number(prediction) === 1
           ? "Stockout detected (1)."
           : "No stockout detected (0).";
       element.textContent = label;
+    } else if (modelKey === "construction_estimate") {
+      const estimate = Number(prediction);
+      element.textContent = Number.isFinite(estimate)
+        ? `Estimated Total_Estimate: ${estimate.toLocaleString(undefined, {
+            maximumFractionDigits: 2,
+          })} (dataset unit not specified).`
+        : "The model returned an invalid cost estimate.";
+    } else if (modelKey === "civil_risk") {
+      const label =
+        Number(prediction) === 1 ? "Good Project (1)." : "Not Good Project (0).";
+      const probabilities = response.class_probabilities;
+      const probabilityText =
+        probabilities && Object.keys(probabilities).length
+          ? ` Class probabilities — ${Object.entries(probabilities)
+              .map(
+                ([classLabel, value]) =>
+                  `${classLabel}: ${(Number(value) * 100).toFixed(1)}%`,
+              )
+              .join(", ")}.`
+          : "";
+      element.textContent = `${label}${probabilityText}`;
+    } else if (modelKey === "cement_demand") {
+      const estimate = Number(prediction);
+      element.textContent = Number.isFinite(estimate)
+        ? `Estimated consumption: ${estimate.toLocaleString(undefined, {
+            maximumFractionDigits: 2,
+          })} tonnes.`
+        : "The model returned an invalid cement-demand estimate.";
     }
     element.hidden = false;
   };
@@ -195,22 +345,9 @@
       document.querySelector("#ocr-empty-message").hidden =
         Boolean(response.extracted_text?.trim());
       renderInformation(response.extracted_information);
-      renderReadiness(
-        "workforce",
-        readiness.workforce,
-        "#predict-workforce-button",
-        "#workforce-readiness-message",
-        "#workforce-missing-fields",
-        "#workforce-result",
-      );
-      renderReadiness(
-        "supply_chain",
-        readiness.supply_chain,
-        "#predict-supply-button",
-        "#supply-readiness-message",
-        "#supply-missing-fields",
-        "#supply-result",
-      );
+      for (const modelKey of Object.keys(modelUi)) {
+        renderReadiness(modelKey, readiness[modelKey]);
+      }
       results.hidden = false;
     } catch (error) {
       setError(error instanceof Error ? error.message : "Report extraction failed.");
@@ -220,41 +357,45 @@
     }
   });
 
-  const runPrediction = async (modelKey, buttonSelector, resultSelector) => {
+  const runPrediction = async (modelKey) => {
     if (!reportId || !readiness?.[modelKey]?.prediction_enabled) return;
-    const button = document.querySelector(buttonSelector);
-    const result = document.querySelector(resultSelector);
+    const config = modelUi[modelKey];
+    const button = document.querySelector(config.button);
+    const result = document.querySelector(config.result);
+    const error = document.querySelector(config.error);
+    if (!button || !result) return;
     button.disabled = true;
     button.textContent = "Predicting…";
-    setError("");
+    if (error) {
+      error.hidden = true;
+      error.textContent = "";
+    }
     result.hidden = true;
 
-    const endpointModel = modelKey === "supply_chain" ? "supply-chain" : "workforce";
     try {
       const response = await apiRequest(
-        `/api/reports/${encodeURIComponent(reportId)}/predict/${endpointModel}`,
+        `/api/reports/${encodeURIComponent(reportId)}/predict/${config.endpoint}`,
         { method: "POST" },
       );
-      displayPrediction(result, modelKey, response.prediction);
+      displayPrediction(result, modelKey, response);
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Prediction failed.");
+      const message =
+        error instanceof Error ? error.message : "Prediction failed.";
+      const errorElement = document.querySelector(config.error);
+      if (errorElement) {
+        errorElement.textContent = message;
+        errorElement.hidden = false;
+      } else {
+        setError(message);
+      }
     } finally {
-      button.textContent =
-        modelKey === "workforce"
-          ? "Predict Workforce Attendance Risk"
-          : "Predict Supply Chain Stockout Risk";
+      button.textContent = config.label;
       button.disabled = !readiness?.[modelKey]?.prediction_enabled;
     }
   };
 
-  document
-    .querySelector("#predict-workforce-button")
-    .addEventListener("click", () =>
-      runPrediction("workforce", "#predict-workforce-button", "#workforce-result"),
-    );
-  document
-    .querySelector("#predict-supply-button")
-    .addEventListener("click", () =>
-      runPrediction("supply_chain", "#predict-supply-button", "#supply-result"),
-    );
+  for (const [modelKey, config] of Object.entries(modelUi)) {
+    const button = document.querySelector(config.button);
+    button?.addEventListener("click", () => runPrediction(modelKey));
+  }
 })();

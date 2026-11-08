@@ -18,6 +18,7 @@ def _environment_bool(name: str, default: str) -> bool:
 
 class Config:
     SECRET_KEY = os.getenv("SECRET_KEY")
+    TEMPLATES_AUTO_RELOAD = True
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
     SESSION_COOKIE_NAME = "siteintel_session"

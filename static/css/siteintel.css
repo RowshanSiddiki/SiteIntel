@@ -132,6 +132,10 @@ form input:focus { border-color: #527b61; box-shadow: 0 0 0 3px rgba(82, 123, 97
 .model-readiness-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
 .model-readiness-card { min-width: 0; padding: 1.1rem; border: 1px solid var(--line); border-radius: 14px; background: #fbfcfb; }
 .model-readiness-card h3 { font-size: 1.05rem; }
+.model-status { margin: .55rem 0 0; color: var(--forest); font-size: .78rem; font-weight: 750; line-height: 1.45; overflow-wrap: anywhere; }
+.model-input-details { margin: .6rem 0; color: var(--muted); font-size: .8rem; }
+.model-input-details summary { color: var(--forest); font-weight: 700; cursor: pointer; }
+.model-input-details ul { margin: .45rem 0; padding-left: 1.2rem; line-height: 1.6; overflow-wrap: anywhere; }
 .readiness-message { margin: .7rem 0; color: var(--muted); font-size: .87rem; line-height: 1.5; }
 .missing-fields { margin: .6rem 0 1rem; padding-left: 1.2rem; color: #6a5640; font-size: .81rem; line-height: 1.65; overflow-wrap: anywhere; }
 .report-data-warning { margin: .65rem 0 0; padding: .65rem .75rem; border-left: 3px solid #c98424; color: #704b16; background: #fff8eb; font-size: .8rem; line-height: 1.5; overflow-wrap: anywhere; }

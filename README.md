@@ -4,8 +4,9 @@ SiteIntel is a modular construction-intelligence web application built with
 Flask, server-rendered HTML, CSS, JavaScript, Flask-SQLAlchemy, and MySQL. It
 includes CSRF-protected account registration/login/logout and a protected
 dashboard. The dashboard also accepts daily report images and runs local OCR
-to prepare structured report fields for the existing workforce and supply-chain
-models. The `pkl_files/`, `Notebooks/`, and `Datasets/` contents are preserved.
+to prepare structured report fields for five trained workforce, supply-chain, construction-cost,
+civil-risk, and cement-demand models. The `pkl_files/`, `Notebooks/`, and
+`Datasets/` contents are preserved.
 
 ## Requirements
 
@@ -114,9 +115,11 @@ python -m unittest discover -s tests -v
 
 Tests use an isolated in-memory SQLite database and cover authentication,
 report API access controls, extraction, readiness, and local Tesseract OCR.
-They do not create or modify MySQL records. Prediction tests deliberately
-verify that the currently incompatible model artifacts are refused; they do
-not claim a valid model prediction.
+They do not create or modify MySQL records. The three newly integrated models
+are exercised against actual rows from their checked-in datasets and actual
+pickle artifacts. Workforce and supply-chain prediction endpoints remain
+blocked because those two existing artifacts are incompatible with their
+required input/target constraints described below.
 
 ## Daily construction report extraction
 
@@ -145,11 +148,17 @@ API endpoints (all require an authenticated session and CSRF protection for
 POST requests):
 
 - `POST /api/reports/extract` — multipart upload (`image`); runs OCR, extracts
-  fields, and returns readiness for both models.
+  fields once, and returns independent readiness for all five models.
 - `GET /api/reports/<report_id>` — retrieve the report data for its owner.
 - `POST /api/reports/<report_id>/predict/workforce` — requests workforce risk.
 - `POST /api/reports/<report_id>/predict/supply-chain` — requests stockout
   classification.
+- `POST /api/reports/<report_id>/predict/construction-estimate` — estimates
+  `Total_Estimate`.
+- `POST /api/reports/<report_id>/predict/civil-risk` — predicts `is_good` and,
+  when supported, returns both class probabilities.
+- `POST /api/reports/<report_id>/predict/cement-demand` — estimates
+  `consumed_tonnes`.
 
 The backend uses metadata feature order and numeric/categorical declarations.
 The model pipelines handle legitimate remaining nulls; the API does not fill
@@ -209,6 +218,54 @@ displaying a misleading result. Replace it with a compatible artifact trained
 on both target classes before enabling that prediction. The app does not
 retrain or alter either pickle file.
 
+### Construction-cost model inputs
+
+The metadata feature order is `Material_Cost`, `Labor_Cost`, `Profit_Rate`,
+`Discount_or_Markup`, `Policy_Reason`. The first four are numeric and the last
+is categorical. `Total_Estimate` is excluded. Readiness requires all five
+values to be read from the report; no costs or pricing policy are inferred.
+The model returns the predicted number without a currency symbol because the
+dataset does not document a currency or unit.
+
+**Important model limitation:** every row in `construction_estimates.csv`
+exactly follows
+`(Material_Cost + Labor_Cost) * (1 + Profit_Rate / 100) + Discount_or_Markup`.
+The model therefore learns a deterministic calculation from components that
+directly define the target. Its output is not an independent cost estimate.
+
+### Civil-risk model inputs
+
+The model's `feature_columns` metadata order is `Certificates`, `Years of
+Experience`, `age`, `Time Arrival Strafe`, `Project Cost`, `Project Proximity`,
+`Violation Risk Index`, `Company PCAB Score`, `Weekly Overtime Hours`, and
+`Salary Bracket`. All ten inputs are numeric. `is_good` and `Project ID` are
+not inputs. Readiness requires all ten values to be explicitly present in the
+report. Prediction is a model-based project assessment, not a definitive
+judgment about a person or contractor. Since the model includes age and
+experience, do not use its output for automated employment or other
+consequential decisions.
+
+### Cement-demand model inputs
+
+The metadata feature order is `site_id`, `cement_type`,
+`planned_pour_tonnes`, `rain_mm`, `avg_temp_c`, `year`, `month`,
+`week_of_year`, `day_of_week`, `quarter`, `is_weekend`, `site_demand_lag_1`,
+`site_demand_lag_7`, `site_demand_lag_14`, `site_rolling_mean_7`,
+`site_rolling_mean_30`, `date_year`, `date_month`, `date_day`, and
+`date_dayofweek`. The fitted pipeline identifies `site_id` and `cement_type`
+as categorical and the remaining inputs as numeric; the metadata itself does
+not list type groups. `date_dayofweek` uses Monday=0 through Sunday=6. The raw
+`date` and target `consumed_tonnes` are never passed to the model. The report
+date is transformed into the four `date_*` calendar features. No weather,
+lag, rolling-history, or other values are generated; readiness requires every
+input feature to be extracted or date-derived. Missing historical and weather
+information therefore commonly leaves this prediction disabled.
+
+The checked-in cement dataset has 31,980 rows, and `consumed_tonnes` exactly
+equals `planned_pour_tonnes` in 19,195 rows. This is a material limitation of
+the training data; no model-quality metric is documented here. Predictions
+are estimates for the supplied date and inputs, not guaranteed future demand.
+
 The serialized models were produced with scikit-learn 1.6.1. The dependency is
 pinned to that version to avoid incompatible unpickling; use the commands in
 **Install** to prepare the environment.
@@ -217,5 +274,4 @@ pinned to that version to avoid incompatible unpickling; use the commands in
 
 Authentication, dashboard, and reports are separate blueprints; database
 extensions and configuration are centralized in `siteintel/`. Contract RAG,
-the AI assistant, prediction history, and other ML models are not part of this
-stage.
+the AI assistant, and prediction history are not part of this stage.

@@ -15,7 +15,7 @@ from siteintel.reports.extraction import (
     extract_report_fields,
     feature_groups,
 )
-from siteintel.reports.model_registry import ModelUnavailableError
+from siteintel.reports.model_registry import MODEL_SPECS, ModelUnavailableError
 from siteintel.reports.ocr import extract_ocr
 from siteintel.reports.storage import (
     InvalidReportImage,
@@ -50,13 +50,45 @@ def _readiness(fields: dict[str, Any]) -> dict[str, dict[str, Any]]:
     registry = _model_registry()
     workforce = registry.get("workforce")
     supply = registry.get("supply_chain")
-    return calculate_readiness(
+    additional_status = {
+        model_key: (
+            registry.get(model_key).usable,
+            registry.get(model_key).issue,
+        )
+        for model_key in (
+            "construction_estimate",
+            "civil_risk",
+            "cement_demand",
+        )
+    }
+    readiness = calculate_readiness(
         fields,
         workforce_available=workforce.usable,
         workforce_issue=workforce.issue,
         supply_available=supply.usable,
         supply_issue=supply.issue,
+        additional_model_status=additional_status,
     )
+    for model_key, (stem, target) in MODEL_SPECS.items():
+        artifact = registry.get(model_key)
+        readiness[model_key].update(
+            {
+                "model_file": f"{stem}.pkl",
+                "metadata_file": f"{stem}_metadata.pkl",
+                "target": target,
+                "model_loaded": artifact.model is not None,
+                "model_status": (
+                    "ready"
+                    if artifact.usable
+                    else (
+                        "loaded_with_prediction_blocker"
+                        if artifact.model is not None
+                        else "load_failed"
+                    )
+                ),
+            }
+        )
+    return readiness
 
 
 def _report_response(report: dict[str, Any]):
@@ -108,6 +140,17 @@ def extract_report():
     registry = _model_registry()
     workforce = registry.get("workforce")
     supply = registry.get("supply_chain")
+    additional_models = {
+        model_key: (
+            registry.get(model_key).input_features,
+            registry.get(model_key).numeric_features,
+        )
+        for model_key in (
+            "construction_estimate",
+            "civil_risk",
+            "cement_demand",
+        )
+    }
     fields = extract_report_fields(
         extracted_text,
         workforce_features=workforce.input_features,
@@ -115,6 +158,7 @@ def extract_report():
         supply_features=supply.input_features,
         supply_numeric=supply.numeric_features,
         ocr_lines=ocr_lines,
+        additional_models=additional_models,
     )
     report = {
         "report_id": report_id,
@@ -155,7 +199,13 @@ def _predict(report_id: str, model_key: str, readiness_key: str):
     if report is None:
         return _error("report_not_found", "Report not found.", 404)
 
-    status = report["readiness"][readiness_key]
+    status = report.get("readiness", {}).get(readiness_key)
+    if not isinstance(status, dict):
+        return _error(
+            "report_reextract_required",
+            "This report was extracted with an older schema. Upload it again to prepare inputs for this model.",
+            409,
+        )
     if not status["data_ready"]:
         return jsonify(
             {
@@ -176,7 +226,13 @@ def _predict(report_id: str, model_key: str, readiness_key: str):
 
     artifact = _model_registry().get(model_key)
     try:
-        prediction = artifact.predict(report["fields"][readiness_key])
+        model_values = report["fields"][readiness_key]
+        prediction = artifact.predict(model_values)
+        probabilities = (
+            artifact.predict_probabilities(model_values)
+            if model_key == "civil_risk"
+            else None
+        )
     except ModelUnavailableError as error:
         return _error("model_unavailable", str(error), 409)
     except (ValueError, TypeError):
@@ -188,14 +244,15 @@ def _predict(report_id: str, model_key: str, readiness_key: str):
 
     if hasattr(prediction, "item"):
         prediction = prediction.item()
-    return jsonify(
-        {
-            "report_id": report_id,
-            "model": model_key,
-            "target": artifact.target,
-            "prediction": prediction,
-        }
-    )
+    response = {
+        "report_id": report_id,
+        "model": model_key,
+        "target": artifact.target,
+        "prediction": prediction,
+    }
+    if probabilities is not None:
+        response["class_probabilities"] = probabilities
+    return jsonify(response)
 
 
 @reports_bp.post("/<report_id>/predict/workforce")
@@ -208,6 +265,28 @@ def predict_workforce(report_id: str):
 @require_authenticated_api
 def predict_supply_chain(report_id: str):
     return _predict(report_id, "supply_chain", "supply_chain")
+
+
+@reports_bp.post("/<report_id>/predict/construction-estimate")
+@require_authenticated_api
+def predict_construction_estimate(report_id: str):
+    return _predict(
+        report_id,
+        "construction_estimate",
+        "construction_estimate",
+    )
+
+
+@reports_bp.post("/<report_id>/predict/civil-risk")
+@require_authenticated_api
+def predict_civil_risk(report_id: str):
+    return _predict(report_id, "civil_risk", "civil_risk")
+
+
+@reports_bp.post("/<report_id>/predict/cement-demand")
+@require_authenticated_api
+def predict_cement_demand(report_id: str):
+    return _predict(report_id, "cement_demand", "cement_demand")
 
 
 @reports_bp.errorhandler(RequestEntityTooLarge)

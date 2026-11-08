@@ -65,18 +65,62 @@
         <article class="model-readiness-card" aria-labelledby="workforce-readiness-title">
           <p class="eyebrow">MODEL 1</p>
           <h3 id="workforce-readiness-title">Workforce Attendance Risk</h3>
+          <p id="workforce-model-status" class="model-status"></p>
           <p id="workforce-readiness-message" class="readiness-message"></p>
+          <details class="model-input-details"><summary>Required input features</summary><ul id="workforce-required-fields"></ul></details>
+          <details class="model-input-details"><summary>Extracted input values</summary><ul id="workforce-extracted-fields"></ul></details>
           <ul id="workforce-missing-fields" class="missing-fields"></ul>
           <button id="predict-workforce-button" class="button button-primary" type="button" disabled>Predict Workforce Attendance Risk</button>
           <p id="workforce-result" class="prediction-result" role="status" hidden></p>
+          <p id="workforce-error" class="report-message report-error" role="alert" hidden></p>
         </article>
         <article class="model-readiness-card" aria-labelledby="supply-readiness-title">
           <p class="eyebrow">MODEL 2</p>
           <h3 id="supply-readiness-title">Supply Chain Stockout Risk</h3>
+          <p id="supply-model-status" class="model-status"></p>
           <p id="supply-readiness-message" class="readiness-message"></p>
+          <details class="model-input-details"><summary>Required input features</summary><ul id="supply-required-fields"></ul></details>
+          <details class="model-input-details"><summary>Extracted input values</summary><ul id="supply-extracted-fields"></ul></details>
           <ul id="supply-missing-fields" class="missing-fields"></ul>
           <button id="predict-supply-button" class="button button-primary" type="button" disabled>Predict Supply Chain Stockout Risk</button>
           <p id="supply-result" class="prediction-result" role="status" hidden></p>
+          <p id="supply-error" class="report-message report-error" role="alert" hidden></p>
+        </article>
+        <article class="model-readiness-card" aria-labelledby="construction-estimate-readiness-title">
+          <p class="eyebrow">MODEL 3</p>
+          <h3 id="construction-estimate-readiness-title">Construction Cost Estimation</h3>
+          <p id="construction-estimate-model-status" class="model-status"></p>
+          <p id="construction-estimate-readiness-message" class="readiness-message"></p>
+          <details class="model-input-details"><summary>Required input features</summary><ul id="construction-estimate-required-fields"></ul></details>
+          <details class="model-input-details"><summary>Extracted input values</summary><ul id="construction-estimate-extracted-fields"></ul></details>
+          <ul id="construction-estimate-missing-fields" class="missing-fields"></ul>
+          <button id="predict-construction-estimate-button" class="button button-primary" type="button" disabled>Predict Construction Cost</button>
+          <p id="construction-estimate-result" class="prediction-result" role="status" hidden></p>
+          <p id="construction-estimate-error" class="report-message report-error" role="alert" hidden></p>
+        </article>
+        <article class="model-readiness-card" aria-labelledby="civil-risk-readiness-title">
+          <p class="eyebrow">MODEL 4</p>
+          <h3 id="civil-risk-readiness-title">Civil Engineering Project Risk</h3>
+          <p id="civil-risk-model-status" class="model-status"></p>
+          <p id="civil-risk-readiness-message" class="readiness-message"></p>
+          <details class="model-input-details"><summary>Required input features</summary><ul id="civil-risk-required-fields"></ul></details>
+          <details class="model-input-details"><summary>Extracted input values</summary><ul id="civil-risk-extracted-fields"></ul></details>
+          <ul id="civil-risk-missing-fields" class="missing-fields"></ul>
+          <button id="predict-civil-risk-button" class="button button-primary" type="button" disabled>Predict Civil Project Risk</button>
+          <p id="civil-risk-result" class="prediction-result" role="status" hidden></p>
+          <p id="civil-risk-error" class="report-message report-error" role="alert" hidden></p>
+        </article>
+        <article class="model-readiness-card" aria-labelledby="cement-demand-readiness-title">
+          <p class="eyebrow">MODEL 5</p>
+          <h3 id="cement-demand-readiness-title">Cement Demand Forecasting</h3>
+          <p id="cement-demand-model-status" class="model-status"></p>
+          <p id="cement-demand-readiness-message" class="readiness-message"></p>
+          <details class="model-input-details"><summary>Required input features</summary><ul id="cement-demand-required-fields"></ul></details>
+          <details class="model-input-details"><summary>Extracted input values</summary><ul id="cement-demand-extracted-fields"></ul></details>
+          <ul id="cement-demand-missing-fields" class="missing-fields"></ul>
+          <button id="predict-cement-demand-button" class="button button-primary" type="button" disabled>Predict Cement Demand</button>
+          <p id="cement-demand-result" class="prediction-result" role="status" hidden></p>
+          <p id="cement-demand-error" class="report-message report-error" role="alert" hidden></p>
         </article>
       </div>
     </section>
@@ -84,5 +128,5 @@
 </section>
 {% endblock %}
 {% block page_scripts %}
-  <script defer src="{{ url_for('static', filename='js/report.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/report.js', v='20261108-model-load-status') }}"></script>
 {% endblock %}
