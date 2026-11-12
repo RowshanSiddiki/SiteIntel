@@ -16,7 +16,7 @@ from werkzeug.exceptions import RequestEntityTooLarge
 
 from siteintel.config import Config
 from siteintel.extensions import csrf, db, login_manager
-from siteintel.reports.model_registry import load_model_registry
+from siteintel.ml.model_registry import load_model_registry
 
 
 def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
@@ -49,10 +49,12 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
 
     from siteintel.auth import auth_bp
     from siteintel.dashboard import dashboard_bp
+    from siteintel.ml.routes import ml_bp
     from siteintel.reports import reports_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
+    app.register_blueprint(ml_bp)
     app.register_blueprint(reports_bp)
 
     @app.get("/")

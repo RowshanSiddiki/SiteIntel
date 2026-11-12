@@ -5,4 +5,5 @@ __pycache__/
 .pytest_cache/
 .coverage
 instance/
-pkl_files/
+pkl_files/*
+!pkl_files/.gitkeep
