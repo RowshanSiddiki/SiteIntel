@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}ML Predictions · SiteIntel{% endblock %}
+{% block content %}
+<section class="ml-page">
+  <a class="back-link" href="{{ url_for('dashboard.index') }}">← Back to dashboard</a>
+  <p class="eyebrow">CONSTRUCTION INTELLIGENCE</p>
+  <h1>ML Predictions</h1>
+  <p class="ml-intro">Provide the inputs for one model at a time. These values are entered manually and are not inferred from uploaded reports.</p>
+
+  <div class="ml-grid">
+    <section class="ml-card" aria-labelledby="cement-heading">
+      <p class="eyebrow">CEMENT DEMAND</p>
+      <h2 id="cement-heading">Cement demand prediction</h2>
+      <p>Estimate cement consumption in tonnes.</p>
+      <form class="ml-form" data-endpoint="/api/ml/cement-demand" data-model="cement">
+        <label for="cement-planned-pour">Planned pour (tonnes)</label>
+        <input id="cement-planned-pour" name="planned_pour_tonnes" type="number" min="0" step="any" required>
+        <label for="cement-rolling-mean">30-day site demand average (tonnes)</label>
+        <input id="cement-rolling-mean" name="site_rolling_mean_30" type="number" min="0" step="any" required>
+        <label for="cement-rain">Rainfall (mm)</label>
+        <input id="cement-rain" name="rain_mm" type="number" min="0" step="any" required>
+        <label for="cement-temperature">Average temperature (°C)</label>
+        <input id="cement-temperature" name="avg_temp_c" type="number" step="any" required>
+        <button class="button button-primary" type="submit">Predict cement demand</button>
+        <p class="ml-result" role="status" aria-live="polite" hidden></p>
+        <p class="ml-error" role="alert" hidden></p>
+      </form>
+    </section>
+
+    <section class="ml-card" aria-labelledby="concrete-heading">
+      <p class="eyebrow">CONCRETE STRENGTH</p>
+      <h2 id="concrete-heading">Compressive strength prediction</h2>
+      <p>Estimate concrete compressive strength in MPa.</p>
+      <form class="ml-form" data-endpoint="/api/ml/concrete-strength" data-model="concrete">
+        <label for="concrete-cement">Cement (kg/m³)</label>
+        <input id="concrete-cement" name="cement" type="number" min="0" step="any" required>
+        <label for="concrete-slag">Slag (kg/m³)</label>
+        <input id="concrete-slag" name="slag" type="number" min="0" step="any" required>
+        <label for="concrete-water">Water (kg/m³)</label>
+        <input id="concrete-water" name="water" type="number" min="0" step="any" required>
+        <label for="concrete-age">Age (days)</label>
+        <input id="concrete-age" name="age" type="number" min="0" step="1" required>
+        <button class="button button-primary" type="submit">Predict concrete strength</button>
+        <p class="ml-result" role="status" aria-live="polite" hidden></p>
+        <p class="ml-error" role="alert" hidden></p>
+      </form>
+    </section>
+
+    <section class="ml-card" aria-labelledby="delay-heading">
+      <p class="eyebrow">CONSTRUCTION DELAY</p>
+      <h2 id="delay-heading">Delay risk classification</h2>
+      <p>Classifies delay risk using project availability and supplier conditions.</p>
+      <form class="ml-form" data-endpoint="/api/ml/delay-risk" data-model="delay">
+        <label for="delay-material">Material availability</label>
+        <select id="delay-material" name="Material_Availability" required>
+          <option value="">Select availability</option>
+          <option>Low</option><option>Medium</option><option>High</option>
+        </select>
+        <label for="delay-equipment">Equipment availability</label>
+        <select id="delay-equipment" name="Equipment_Availability" required>
+          <option value="">Select availability</option>
+          <option>Low</option><option>Medium</option><option>High</option>
+        </select>
+        <label for="delay-weather">Weather risk</label>
+        <select id="delay-weather" name="Weather_Risk" required>
+          <option value="">Select weather risk</option>
+          <option>Low</option><option>Medium</option><option>High</option>
+        </select>
+        <label for="delay-supplier">Supplier delay</label>
+        <select id="delay-supplier" name="Supplier_Delay" required>
+          <option value="">Select supplier delay</option>
+          <option>No</option><option>Yes</option>
+        </select>
+        <p class="field-help">Classification threshold: {{ "%.2f"|format(config["DELAY_RISK_THRESHOLD"]) }} (configurable default; not an optimized threshold).</p>
+        <button class="button button-primary" type="submit">Classify delay risk</button>
+        <p class="ml-result" role="status" aria-live="polite" hidden></p>
+        <p class="ml-error" role="alert" hidden></p>
+      </form>
+    </section>
+  </div>
+</section>
+{% endblock %}
+{% block page_scripts %}
+  <script defer src="{{ url_for('static', filename='js/ml_predictions.js', v='20261112-ml-predictions') }}"></script>
+{% endblock %}

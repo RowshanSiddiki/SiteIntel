@@ -139,22 +139,33 @@ POST requests):
   labeled fields, and stores the report for its owner.
 - `GET /api/reports/<report_id>` — retrieve the report data for its owner.
 
-## Model integration preparation
+## ML predictions
 
-The root `pkl_files/` directory is retained for these future artifacts:
+The authenticated dashboard links to **ML Predictions** at `/dashboard/ml/`.
+Each form accepts manual inputs for one model; uploaded OCR reports do not
+populate these fields.
 
-- `cement_demand.pkl`
-- `budget_overrun.pkl`
-- `construction_delay.pkl`
+Authenticated, CSRF-protected JSON endpoints:
 
-No replacement models are currently present. The application has a centralized
-registry with absolute artifact paths and a one-time load cache. Model-specific
-predictors and prediction routes will be added only after the actual artifacts,
-serialization libraries, and training feature definitions are available.
+- `POST /api/ml/cement-demand` — accepts `planned_pour_tonnes`,
+  `site_rolling_mean_30`, `rain_mm`, and `avg_temp_c`; returns predicted
+  consumption in tonnes.
+- `POST /api/ml/concrete-strength` — accepts `cement`, `slag`, `water`, and
+  `age`; returns predicted compressive strength in MPa.
+- `POST /api/ml/delay-risk` — accepts `Material_Availability`,
+  `Equipment_Availability`, `Weather_Risk`, and `Supplier_Delay`; returns
+  class-1 probability, class, and a Yes/No label. The default classification
+  threshold is `0.5`, configurable with the Flask `DELAY_RISK_THRESHOLD`
+  setting. It is not an optimized threshold.
 
-The checked-in datasets are retained as source material. The Flask application
-does not import any ML libraries until the replacement model contracts are
-available.
+Model packages are loaded and cached by the centralized registry from the
+root `pkl_files/` directory. The model pickle files are excluded from Git;
+distribute them separately or through an appropriate model-artifact storage
+mechanism so a fresh checkout can load the models.
+
+The checked-in datasets remain available as source material. Prediction
+responses are model outputs for the submitted values, not guarantees of
+construction outcomes.
 
 ## Future modules
 

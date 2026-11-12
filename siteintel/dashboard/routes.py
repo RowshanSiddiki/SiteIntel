@@ -8,3 +8,9 @@ from siteintel.dashboard import dashboard_bp
 @login_required
 def index():
     return render_template("dashboard.html", user=current_user)
+
+
+@dashboard_bp.get("/ml/")
+@login_required
+def ml_predictions():
+    return render_template("ml_predictions.html")

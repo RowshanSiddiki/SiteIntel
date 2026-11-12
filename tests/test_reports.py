@@ -4,12 +4,12 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from PIL import Image, ImageDraw, ImageFont
 
 from siteintel import create_app
-from siteintel.ml.model_registry import MODEL_FILES, MODEL_DIRECTORY, ModelRegistry
+from siteintel.ml.model_registry import ModelRegistry
 from siteintel.reports.extraction import extract_report_fields
 from siteintel.reports.ocr import extract_ocr
 
@@ -224,38 +224,48 @@ class ConstructionReportTests(unittest.TestCase):
         self.assertEqual(response.status_code, 413)
         self.assertEqual(response.json["error"]["code"], "image_too_large")
 
-    def test_model_registry_targets_only_the_three_future_artifacts(self):
+    def test_model_registry_loads_packages_once_in_exact_feature_order(self):
         registry = ModelRegistry()
-        self.assertEqual(
-            MODEL_FILES,
-            {
-                "cement_demand": "cement_demand.pkl",
-                "budget_overrun": "budget_overrun.pkl",
-                "construction_delay": "construction_delay.pkl",
-            },
-        )
-        self.assertEqual(registry.directory, MODEL_DIRECTORY.resolve())
-        self.assertTrue(registry.model_path("cement_demand").is_absolute())
-        self.assertEqual(registry.model_path("budget_overrun").parent, MODEL_DIRECTORY)
-        self.assertEqual(registry.model_path("construction_delay").parent, MODEL_DIRECTORY)
+        for model_key, expected_features in (
+            (
+                "cement_demand",
+                (
+                    "planned_pour_tonnes",
+                    "site_rolling_mean_30",
+                    "rain_mm",
+                    "avg_temp_c",
+                ),
+            ),
+            (
+                "concrete_strength",
+                ("cement", "slag", "water", "age"),
+            ),
+            (
+                "delay_risk",
+                (
+                    "Material_Availability",
+                    "Equipment_Availability",
+                    "Weather_Risk",
+                    "Supplier_Delay",
+                ),
+            ),
+        ):
+            with self.subTest(model=model_key):
+                package = registry.get(model_key)
+                self.assertEqual(package.features, expected_features)
+                self.assertEqual(
+                    tuple(package.model.feature_names_in_),
+                    expected_features,
+                )
+                self.assertIs(registry.get(model_key), package)
 
-    def test_model_registry_loads_each_artifact_once(self):
-        registry = ModelRegistry()
-        model = object()
-        loader = Mock(return_value=model)
-
-        with patch.object(Path, "is_file", return_value=True):
-            self.assertIs(registry.load("cement_demand", loader), model)
-            self.assertIs(registry.load("cement_demand", loader), model)
-
-        loader.assert_called_once_with(MODEL_DIRECTORY / "cement_demand.pkl")
-
-    def test_no_prediction_api_routes_are_registered(self):
+    def test_ml_routes_are_registered_without_changing_report_routes(self):
         self.assertIn("ml", self.app.blueprints)
-        route_rules = (
-            rule.rule for rule in self.app.url_map.iter_rules()
-        )
-        self.assertFalse(any("/predict/" in rule for rule in route_rules))
+        route_rules = {rule.rule for rule in self.app.url_map.iter_rules()}
+        self.assertIn("/api/ml/cement-demand", route_rules)
+        self.assertIn("/api/ml/concrete-strength", route_rules)
+        self.assertIn("/api/ml/delay-risk", route_rules)
+        self.assertIn("/api/reports/extract", route_rules)
 
     @unittest.skipUnless(shutil.which("tesseract"), "Tesseract is not installed")
     def test_local_tesseract_reads_and_extracts_printed_report_text(self):

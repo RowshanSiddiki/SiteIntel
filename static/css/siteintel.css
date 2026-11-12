@@ -105,6 +105,22 @@ form input:focus { border-color: #527b61; box-shadow: 0 0 0 3px rgba(82, 123, 97
 .next-steps { display: flex; gap: 1rem; align-items: flex-start; margin-top: 1.4rem; padding: 1.2rem; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.6); }
 .next-icon { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border-radius: 10px; color: var(--forest-dark); background: var(--lime); font-weight: 800; }
 .next-steps h2 { margin-top: .1rem; font-size: 1rem; }
+.dashboard-ml-link { margin-top: .85rem; }
+.ml-page { padding: clamp(2.5rem, 7vw, 5rem) 0; }
+.ml-page h1 { margin: .25rem 0 .7rem; color: var(--forest-dark); font-size: clamp(2rem, 5vw, 3rem); }
+.back-link { display: inline-block; margin-bottom: 1.6rem; font-size: .9rem; font-weight: 700; text-decoration: none; }
+.ml-intro { max-width: 720px; margin: 0 0 1.5rem; color: var(--muted); line-height: 1.65; }
+.ml-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 1rem; align-items: start; }
+.ml-card { min-width: 0; padding: 1.35rem; border: 1px solid var(--line); border-radius: 15px; background: var(--surface); box-shadow: 0 12px 35px rgba(22, 53, 40, .06); }
+.ml-card h2 { margin: .2rem 0 .5rem; color: var(--forest-dark); font-size: 1.2rem; }
+.ml-card > p:not(.eyebrow) { margin: 0 0 1rem; color: var(--muted); font-size: .88rem; line-height: 1.55; }
+.ml-form { margin-top: .8rem; }
+.ml-form select { width: 100%; min-height: 48px; padding: .7rem .8rem; border: 1px solid #cbd8d0; border-radius: 9px; color: var(--ink); background: white; font: inherit; }
+.ml-form select:focus { border-color: #527b61; outline: 0; box-shadow: 0 0 0 3px rgba(82, 123, 97, .15); }
+.ml-form .button { width: 100%; margin-top: 1rem; }
+.ml-result, .ml-error { margin: 1rem 0 0; padding: .8rem; border-radius: 9px; font-size: .9rem; font-weight: 700; line-height: 1.5; overflow-wrap: anywhere; }
+.ml-result { border: 1px solid #c4dfcd; color: #1d603e; background: #effaf2; }
+.ml-error { border: 1px solid #e7c7c4; color: #842d2a; background: #fff3f1; }
 .report-panel { margin: 2rem 0 3rem; padding: clamp(1.25rem, 4vw, 2rem); border: 1px solid var(--line); border-radius: 20px; background: var(--surface); box-shadow: 0 18px 55px rgba(22, 53, 40, .07); }
 .report-panel-heading { max-width: 720px; }
 .report-panel-heading h2, .report-results-heading h3 { margin: .2rem 0 .55rem; color: var(--forest-dark); font-size: clamp(1.35rem, 3vw, 1.8rem); letter-spacing: -.025em; }

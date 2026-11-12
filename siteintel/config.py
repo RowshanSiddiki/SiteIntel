@@ -27,6 +27,7 @@ class Config:
     SESSION_COOKIE_SECURE = _environment_bool("SESSION_COOKIE_SECURE", "false")
     PERMANENT_SESSION_LIFETIME = 60 * 60 * 8
     WTF_CSRF_TIME_LIMIT = 3600
+    DELAY_RISK_THRESHOLD = 0.5
 
     @classmethod
     def database_uri(cls) -> URL:
