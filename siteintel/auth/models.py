@@ -25,6 +25,38 @@ class User(UserMixin, db.Model):
         onupdate=func.now(),
     )
 
+    projects_owned = db.relationship(
+        "Project",
+        back_populates="owner",
+        passive_deletes=True,
+    )
+    project_memberships = db.relationship(
+        "ProjectMember",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    uploaded_documents = db.relationship(
+        "Document",
+        back_populates="uploaded_by",
+        passive_deletes="all",
+    )
+    construction_records_created = db.relationship(
+        "ConstructionRecord",
+        back_populates="created_by",
+        passive_deletes="all",
+    )
+    expenses_created = db.relationship(
+        "Expense",
+        back_populates="created_by",
+        passive_deletes="all",
+    )
+    quotation_items_created = db.relationship(
+        "QuotationItem",
+        back_populates="created_by",
+        passive_deletes="all",
+    )
+
     def __repr__(self) -> str:
         return f"<User id={self.id}>"
 

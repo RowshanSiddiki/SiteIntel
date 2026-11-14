@@ -15,7 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from siteintel.config import Config
-from siteintel.extensions import csrf, db, login_manager
+from siteintel.extensions import csrf, db, login_manager, migrate
 from siteintel.ml.model_registry import load_model_registry
 
 
@@ -44,13 +44,17 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
     app.extensions["siteintel_model_registry"] = load_model_registry()
 
     db.init_app(app)
+    migrate.init_app(app, db, compare_type=True)
     csrf.init_app(app)
     login_manager.init_app(app)
 
     from siteintel.auth import auth_bp
     from siteintel.dashboard import dashboard_bp
     from siteintel.ml.routes import ml_bp
+    from siteintel.ml import models as ml_models
+    from siteintel.projects import project_models
     from siteintel.reports import reports_bp
+    from siteintel.reports import models as report_models
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -120,7 +124,9 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
 
             create_database_if_missing()
             with app.app_context():
-                db.create_all()
+                from flask_migrate import upgrade
+
+                upgrade()
         except (SQLAlchemyError, OSError, RuntimeError) as error:
             app.logger.exception("Database initialization failed")
             raise click.ClickException(

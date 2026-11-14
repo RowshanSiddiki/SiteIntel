@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }} · SiteIntel{% endblock %}
+{% block content %}
+<section class="workspace-section" id="project-workspace" data-project-id="{{ project.id }}">
+  <a class="back-link" href="{{ url_for('dashboard.index') }}#my-projects">← My Projects</a>
+  <h1 id="workspace-title">{{ project.name }}</h1>
+  <p id="workspace-error" class="ml-error" role="alert" hidden></p>
+  <div id="workspace-content" hidden>
+    <nav class="project-tabs" aria-label="Project sections">
+      <a href="#project-overview">Overview</a><a href="#project-reports">Reports</a><a href="#project-analysis">ML Predictions</a><a href="#project-history">Project History</a>
+    </nav>
+    <section id="project-overview" class="workspace-card"><h3>Overview</h3><div id="overview-content"></div></section>
+    <section id="project-reports" class="workspace-card">
+      <h3>Reports</h3>
+      <form id="report-upload-form" class="report-upload-form">
+        <label for="report-image">Upload PDF or image</label>
+        <input id="report-image" name="image" type="file" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" required>
+        <button id="extract-report-button" class="button button-primary" type="submit" disabled>Extract Information</button>
+        <span id="extract-report-loading" class="loading-message" role="status" hidden>Processing your report…</span>
+      </form>
+      <p id="report-error" class="report-message report-error" role="alert" hidden></p>
+      <div id="report-list"></div>
+      <div id="report-preview-wrap" class="report-preview-wrap" hidden>
+        <img id="report-preview" class="report-preview" alt="Report preview">
+        <iframe id="report-pdf-preview" title="PDF report preview" hidden></iframe>
+      </div>
+      <section id="report-results" class="report-results" aria-live="polite" hidden>
+        <div class="section-title"><h3>Review information</h3><span id="review-status"></span></div>
+        <p id="ocr-empty-message" class="field-help" hidden>No labeled information was found.</p>
+        <form id="review-form"><div id="extracted-information" class="review-grid"></div><button id="confirm-report" class="button button-primary" type="submit">Confirm Information</button></form>
+        <p id="review-message" role="status"></p>
+        <details class="ocr-text-details"><summary>Original extracted text</summary><pre id="original-extracted-text"></pre></details>
+      </section>
+    </section>
+    <section id="project-analysis" class="workspace-card"><h3>ML Predictions</h3><div id="workspace-predictions" class="ml-grid"></div></section>
+    <section id="project-history" class="workspace-card"><h3>Project History</h3><div id="history-content"></div></section>
+  </div>
+</section>
+{% endblock %}
+{% block page_scripts %}
+  <script defer src="{{ url_for('static', filename='js/report.js', v='20261114-review') }}"></script>
+{% endblock %}

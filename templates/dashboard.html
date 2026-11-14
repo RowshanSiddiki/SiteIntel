@@ -1,74 +1,59 @@
 {% extends "base.html" %}
 {% block title %}Dashboard · SiteIntel{% endblock %}
 {% block content %}
-<section class="dashboard">
-  <p class="eyebrow">YOUR WORKSPACE</p>
-  <h1>Welcome, {{ user.full_name }}</h1>
-  <p class="intro-copy">Your SiteIntel account is ready.</p>
-  <section class="account-card" aria-labelledby="account-heading">
-    <div class="account-card-heading">
-      <div>
-        <p class="eyebrow">ACCOUNT</p>
-        <h2 id="account-heading">Profile information</h2>
-      </div>
-      <span class="account-avatar" aria-hidden="true">{{ user.full_name[:1]|upper }}</span>
-    </div>
-    <dl class="account-details">
-      <div><dt>Full name</dt><dd>{{ user.full_name }}</dd></div>
-      <div><dt>Email address</dt><dd>{{ user.email }}</dd></div>
-      <div><dt>Account ID</dt><dd>{{ user.id }}</dd></div>
-      <div>
-        <dt>Member since</dt>
-        <dd>{{ user.created_at.strftime("%B %d, %Y") if user.created_at else "—" }}</dd>
-      </div>
-    </dl>
-  </section>
-  <section class="next-steps">
-    <span class="next-icon" aria-hidden="true">↗</span>
-    <div>
-      <h2>Construction model predictions</h2>
-      <p>Enter model-specific project inputs to estimate cement demand, concrete strength, or delay risk.</p>
-      <a class="button button-primary dashboard-ml-link" href="{{ url_for('dashboard.ml_predictions') }}">Open ML Predictions</a>
-    </div>
-  </section>
-
-  <section class="report-panel" aria-labelledby="daily-report-heading">
-    <div class="report-panel-heading">
-      <p class="eyebrow">FIELD REPORTS</p>
-      <h2 id="daily-report-heading">Daily Construction Report</h2>
-      <p>Upload a JPG or PNG report image. SiteIntel will extract and display readable text and labeled report fields.</p>
-    </div>
-
-    <form id="report-upload-form" class="report-upload-form" novalidate>
-      <label for="report-image">Construction report image</label>
-      <input id="report-image" name="image" type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" required>
-      <p class="field-help">JPG, JPEG, or PNG · Maximum 10 MB. Clear printed text works best; handwriting recognition depends on legibility.</p>
-      <div id="report-preview-wrap" class="report-preview-wrap" hidden>
-        <img id="report-preview" class="report-preview" alt="Preview of the selected construction report">
-      </div>
-      <p id="report-error" class="report-message report-error" role="alert" hidden></p>
-      <button id="extract-report-button" class="button button-primary" type="submit" disabled>Extract Information</button>
-      <span id="extract-report-loading" class="loading-message" role="status" hidden>Extracting report information…</span>
-    </form>
-
-    <section id="report-results" class="report-results" aria-live="polite" hidden>
-      <div class="report-results-heading">
-        <div>
-          <p class="eyebrow">OCR RESULTS</p>
-          <h3>Extracted information</h3>
-        </div>
-      </div>
-      <p id="ocr-empty-message" class="field-help" hidden>No readable text was detected. Try a sharper, well-lit image.</p>
-      <div id="extracted-information" class="extracted-groups"></div>
-      <details class="ocr-text-details">
-        <summary>View original extracted text</summary>
-        <pre id="original-extracted-text"></pre>
-      </details>
-
+<section class="dashboard" id="dashboard">
+  <div class="page-heading">
+    <div><h1>Welcome, {{ user.full_name }}</h1><p>Here's what's happening with your construction projects.</p></div>
+    <a class="button button-primary" href="#create-project">＋ Create Project</a>
+  </div>
+  <div class="stats-grid" id="dashboard-stats">
+    <article class="stat-card"><strong>{{ '%02d'|format(projects|length) }}</strong><span>Total Projects</span></article>
+    <article class="stat-card"><strong>{{ '%02d'|format(projects|selectattr('status', 'equalto', 'active')|list|length) }}</strong><span>Active Projects</span></article>
+    <article class="stat-card"><strong>{{ '%02d'|format(report_count) }}</strong><span>Reports Uploaded</span></article>
+    <article class="stat-card"><strong>{{ '%02d'|format(prediction_count) }}</strong><span>Predictions</span></article>
+  </div>
+  <div class="dashboard-columns">
+    <section id="my-projects" class="content-section">
+      <div class="section-title"><h2>Recent Projects</h2><span>My Projects</span></div>
+      {% for project in projects %}
+      <a class="project-card" href="{{ url_for('dashboard.project_workspace', project_id=project.id) }}">
+        <span><strong>{{ project.name }}</strong><small>{{ project.description or 'Construction project' }}</small><span class="status-badge">{{ project.status|capitalize }}</span></span>
+        <span aria-hidden="true">→</span>
+      </a>
+      {% else %}
+      <div class="empty-card"><strong>No projects yet</strong><p>Create your first project to start tracking reports and predictions.</p></div>
+      {% endfor %}
+      <form id="create-project" class="quick-actions">
+        <h2>Quick Actions</h2>
+        <label for="new-project-name">Project name</label>
+        <div class="inline-form"><input id="new-project-name" name="name" maxlength="160" placeholder="Enter project name" required><button class="button button-primary" type="submit">Create Project</button></div>
+        <p id="project-create-error" class="ml-error" role="alert" hidden></p>
+      </form>
     </section>
-  </section>
+    <section class="content-section">
+      <div class="section-title"><h2>Recent Activity</h2></div>
+      <div class="activity-card" id="recent-activity">
+        {% for time, title, name in activities %}
+          <div class="activity-row"><span class="activity-icon" aria-hidden="true">▤</span><span><strong>{{ title }}</strong><small>{{ name }} · {{ time.strftime('%b %d, %Y') }}</small></span></div>
+        {% else %}
+          <p class="empty-copy">Your recent reports and construction activity will appear here.</p>
+        {% endfor %}
+      </div>
+      <div class="activity-card status-chart" aria-label="Projects by status">
+        <h2>Project Status</h2>
+        {% for status in ['active', 'paused', 'completed', 'archived'] %}
+          {% set count = projects|selectattr('status', 'equalto', status)|list|length %}
+          <div class="chart-label"><span>{{ status|capitalize }}</span><strong>{{ count }}</strong></div>
+          <div class="chart-track" aria-hidden="true"><span style="width: {{ ((count / projects|length) * 100)|round|int if projects else 0 }}%"></span></div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+
+  <section id="assistant" class="workspace-card"><h2>AI Assistant</h2><p>Coming in a future phase.</p></section>
+  <section id="profile" class="workspace-card"><h2>Profile</h2><p>{{ user.full_name }} · {{ user.email }}</p></section>
 </section>
 {% endblock %}
 {% block page_scripts %}
-  <script defer src="{{ url_for('static', filename='js/report.js', v='20261112-ocr-extraction') }}"></script>
+  <script defer src="{{ url_for('static', filename='js/project_create.js') }}"></script>
 {% endblock %}

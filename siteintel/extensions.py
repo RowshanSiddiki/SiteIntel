@@ -1,4 +1,5 @@
 from flask_login import LoginManager
+from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf.csrf import CSRFProtect
 from sqlalchemy import MetaData
@@ -15,6 +16,7 @@ metadata = MetaData(
 )
 
 db = SQLAlchemy(metadata=metadata)
+migrate = Migrate(compare_type=True)
 csrf = CSRFProtect()
 login_manager = LoginManager()
 login_manager.login_view = "auth.login"

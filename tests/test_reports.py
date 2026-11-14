@@ -113,15 +113,14 @@ class ConstructionReportTests(unittest.TestCase):
                 content_type="multipart/form-data",
             )
 
-    def test_dashboard_keeps_report_upload_without_prediction_controls(self):
+    def test_dashboard_keeps_project_creation_separate_from_report_upload(self):
         self._login()
         response = self.client.get("/dashboard/")
 
         self.assertEqual(response.status_code, 200)
         page = response.get_data(as_text=True)
-        self.assertIn('id="report-upload-form"', page)
-        self.assertIn('id="report-image"', page)
-        self.assertIn('id="original-extracted-text"', page)
+        self.assertIn('id="create-project"', page)
+        self.assertNotIn('id="report-upload-form"', page)
         self.assertNotIn("/predict/", page)
         self.assertNotIn("predict-", page)
 

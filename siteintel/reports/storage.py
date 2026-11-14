@@ -39,7 +39,12 @@ def _owner_directory(user_id: str) -> Path:
     return directory
 
 
-def save_report_image(upload: FileStorage, user_id: str) -> tuple[str, Path]:
+def _ensure_unused_id(directory: Path, report_id: str) -> None:
+    if any((directory / f"{report_id}{suffix}").exists() for suffix in (".jpg", ".png", ".pdf", ".json")):
+        raise FileExistsError("Report identifier already exists.")
+
+
+def save_report_image(upload: FileStorage, user_id: str, report_id: str | None = None) -> tuple[str, Path]:
     if not upload.filename:
         raise InvalidReportImage("Choose an image to upload.")
 
@@ -58,7 +63,6 @@ def save_report_image(upload: FileStorage, user_id: str) -> tuple[str, Path]:
             raise InvalidReportImage("The image dimensions are too large.")
         image.verify()
         upload.stream.seek(0)
-        image = Image.open(upload.stream).convert("RGB")
     except InvalidReportImage:
         raise
     except (
@@ -69,18 +73,43 @@ def save_report_image(upload: FileStorage, user_id: str) -> tuple[str, Path]:
     ) as error:
         raise InvalidReportImage("The uploaded file is not a valid image.") from error
 
-    report_id = uuid4().hex
+    report_id = report_id or uuid4().hex
     directory = _owner_directory(user_id)
+    _ensure_unused_id(directory, report_id)
     suffix = ".jpg" if detected_format == "JPEG" else ".png"
     image_path = directory / f"{report_id}{suffix}"
     image_path.touch(mode=0o600, exist_ok=False)
     try:
-        image.save(image_path, format=detected_format, optimize=True)
+        with image_path.open("wb") as target:
+            while chunk := upload.stream.read(65536):
+                target.write(chunk)
         image_path.chmod(0o600)
     except OSError:
         image_path.unlink(missing_ok=True)
         raise
     return report_id, image_path
+
+
+def save_report_pdf(upload: FileStorage, user_id: str, report_id: str | None = None) -> tuple[str, Path]:
+    if not upload.filename or Path(upload.filename).suffix.lower() != ".pdf":
+        raise InvalidReportImage("Choose a PDF report.")
+    if upload.stream.read(5) != b"%PDF-":
+        raise InvalidReportImage("The uploaded file is not a valid PDF.")
+    upload.stream.seek(0)
+    report_id = report_id or uuid4().hex
+    directory = _owner_directory(user_id)
+    _ensure_unused_id(directory, report_id)
+    path = directory / f"{report_id}.pdf"
+    output = path.open("xb")
+    try:
+        with output:
+            os.chmod(path, 0o600)
+            while chunk := upload.stream.read(65536):
+                output.write(chunk)
+    except OSError:
+        path.unlink(missing_ok=True)
+        raise
+    return report_id, path
 
 
 def save_report_record(user_id: str, report_id: str, report: dict[str, Any]) -> None:
@@ -116,3 +145,12 @@ def load_report_record(user_id: str, report_id: str) -> dict[str, Any] | None:
     ):
         return None
     return data
+
+
+def report_file_path(user_id: str, report_id: str, filename: str) -> Path | None:
+    if not REPORT_ID_PATTERN.fullmatch(report_id):
+        return None
+    if filename not in {f"{report_id}.jpg", f"{report_id}.png", f"{report_id}.pdf"}:
+        return None
+    path = _owner_directory(user_id) / filename
+    return path if path.is_file() else None

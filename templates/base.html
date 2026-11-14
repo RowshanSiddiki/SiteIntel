@@ -3,25 +3,41 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#10251f">
+    <meta name="theme-color" content="#182e48">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}SiteIntel{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/siteintel.css') }}">
     <script defer src="{{ url_for('static', filename='js/auth.js') }}"></script>
   </head>
-  <body>
+  <body class="{{ 'workspace-body' if current_user.is_authenticated else 'public-body' }}">
     <header class="topbar">
       <a class="brand" href="{{ url_for('index') }}" aria-label="SiteIntel home">
-        <span class="brand-mark" aria-hidden="true">S</span>
-        <span>Site<span class="brand-accent">Intel</span></span>
+        <span class="brand-mark" aria-hidden="true">▥</span>
+        <span>SiteIntel</span>
       </a>
       {% if current_user.is_authenticated %}
-        <form action="{{ url_for('auth.logout') }}" method="post">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="button button-outline" type="submit">Log out</button>
-        </form>
+        <a class="header-profile" href="{{ url_for('dashboard.index') }}#profile" aria-label="Profile">{{ current_user.full_name[:1]|upper }}</a>
       {% endif %}
     </header>
+    {% if current_user.is_authenticated %}
+    <aside class="sidebar" aria-label="Main navigation">
+      <p class="sidebar-label">Workspace</p>
+      <nav>
+        <a href="{{ url_for('dashboard.index') }}#dashboard"><span aria-hidden="true">▦</span> Dashboard</a>
+        <a href="{{ url_for('dashboard.index') }}#my-projects"><span aria-hidden="true">▱</span> My Projects</a>
+        <a id="analysis-link" href="{{ url_for('dashboard.ml_predictions') }}"><span aria-hidden="true">▥</span> Data Analysis</a>
+        <a href="{{ url_for('dashboard.index') }}#assistant"><span aria-hidden="true">✧</span> AI Assistant</a>
+      </nav>
+      <p class="sidebar-label account-label">Account</p>
+      <nav>
+        <a href="{{ url_for('dashboard.index') }}#profile"><span aria-hidden="true">♙</span> Profile</a>
+        <form action="{{ url_for('auth.logout') }}" method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit"><span aria-hidden="true">↪</span> Logout</button>
+        </form>
+      </nav>
+    </aside>
+    {% endif %}
     <main class="page-shell">
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}

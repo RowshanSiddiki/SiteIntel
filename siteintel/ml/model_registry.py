@@ -1,4 +1,5 @@
 import logging
+import hashlib
 import pickle
 from dataclasses import dataclass
 from functools import lru_cache
@@ -71,6 +72,7 @@ class ModelRegistry:
     def __init__(self, directory: Path = MODEL_DIRECTORY) -> None:
         self.directory = directory.resolve()
         self._packages: dict[str, ModelPackage] = {}
+        self._versions: dict[str, str] = {}
         self._lock = RLock()
 
     def artifact_path(self, model_key: str, artifact_type: str) -> Path:
@@ -87,6 +89,22 @@ class ModelRegistry:
             if model_key not in self._packages:
                 self._packages[model_key] = self._load_package(model_key)
             return self._packages[model_key]
+
+    def version(self, model_key: str) -> str:
+        with self._lock:
+            if model_key not in self._versions:
+                digest = hashlib.sha256()
+                types = ("model", "features", "encoders") if model_key == "delay_risk" else ("model", "features")
+                for artifact_type in types:
+                    path = self.artifact_path(model_key, artifact_type)
+                    if not path.is_file():
+                        raise ModelArtifactError("A model artifact is missing.")
+                    digest.update(artifact_type.encode())
+                    with path.open("rb") as artifact:
+                        for chunk in iter(lambda: artifact.read(1024 * 1024), b""):
+                            digest.update(chunk)
+                self._versions[model_key] = digest.hexdigest()
+            return self._versions[model_key]
 
     def _load_pickle(self, path: Path) -> Any:
         if not path.is_file():
