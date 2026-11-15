@@ -1,59 +1,102 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block title %}Dashboard · SiteIntel{% endblock %}
 {% block content %}
-<section class="dashboard" id="dashboard">
-  <div class="page-heading">
-    <div><h1>Welcome, {{ user.full_name }}</h1><p>Here's what's happening with your construction projects.</p></div>
-    <a class="button button-primary" href="#create-project">＋ Create Project</a>
+<section class="page-head">
+  <div>
+    <h1>Welcome back, {{ current_user.full_name.split()[0] }}!</h1>
+    <p class="muted">Manage all your construction projects in one place.</p>
   </div>
-  <div class="stats-grid" id="dashboard-stats">
-    <article class="stat-card"><strong>{{ '%02d'|format(projects|length) }}</strong><span>Total Projects</span></article>
-    <article class="stat-card"><strong>{{ '%02d'|format(projects|selectattr('status', 'equalto', 'active')|list|length) }}</strong><span>Active Projects</span></article>
-    <article class="stat-card"><strong>{{ '%02d'|format(report_count) }}</strong><span>Reports Uploaded</span></article>
-    <article class="stat-card"><strong>{{ '%02d'|format(prediction_count) }}</strong><span>Predictions</span></article>
-  </div>
-  <div class="dashboard-columns">
-    <section id="my-projects" class="content-section">
-      <div class="section-title"><h2>Recent Projects</h2><span>My Projects</span></div>
-      {% for project in projects %}
-      <a class="project-card" href="{{ url_for('dashboard.project_workspace', project_id=project.id) }}">
-        <span><strong>{{ project.name }}</strong><small>{{ project.description or 'Construction project' }}</small><span class="status-badge">{{ project.status|capitalize }}</span></span>
-        <span aria-hidden="true">→</span>
-      </a>
-      {% else %}
-      <div class="empty-card"><strong>No projects yet</strong><p>Create your first project to start tracking reports and predictions.</p></div>
-      {% endfor %}
-      <form id="create-project" class="quick-actions">
-        <h2>Quick Actions</h2>
-        <label for="new-project-name">Project name</label>
-        <div class="inline-form"><input id="new-project-name" name="name" maxlength="160" placeholder="Enter project name" required><button class="button button-primary" type="submit">Create Project</button></div>
-        <p id="project-create-error" class="ml-error" role="alert" hidden></p>
-      </form>
-    </section>
-    <section class="content-section">
-      <div class="section-title"><h2>Recent Activity</h2></div>
-      <div class="activity-card" id="recent-activity">
-        {% for time, title, name in activities %}
-          <div class="activity-row"><span class="activity-icon" aria-hidden="true">▤</span><span><strong>{{ title }}</strong><small>{{ name }} · {{ time.strftime('%b %d, %Y') }}</small></span></div>
-        {% else %}
-          <p class="empty-copy">Your recent reports and construction activity will appear here.</p>
-        {% endfor %}
-      </div>
-      <div class="activity-card status-chart" aria-label="Projects by status">
-        <h2>Project Status</h2>
-        {% for status in ['active', 'paused', 'completed', 'archived'] %}
-          {% set count = projects|selectattr('status', 'equalto', status)|list|length %}
-          <div class="chart-label"><span>{{ status|capitalize }}</span><strong>{{ count }}</strong></div>
-          <div class="chart-track" aria-hidden="true"><span style="width: {{ ((count / projects|length) * 100)|round|int if projects else 0 }}%"></span></div>
-        {% endfor %}
-      </div>
-    </section>
+  <button class="button button-primary" type="button" data-open-dialog="create-project-dialog">{{ icon("plus", 18) }}Create New Project</button>
+</section>
+
+<section class="stat-tiles" aria-label="Project statistics">
+  <article class="stat-tile tone-blue"><span class="stat-icon">{{ icon("folder") }}</span><div><strong>{{ stats.total }}</strong><span>Total Projects</span></div></article>
+  <article class="stat-tile tone-green"><span class="stat-icon">{{ icon("check") }}</span><div><strong>{{ stats.active }}</strong><span>Active Projects</span></div></article>
+  <article class="stat-tile tone-amber"><span class="stat-icon">{{ icon("clock") }}</span><div><strong>{{ stats.in_progress }}</strong><span>In Progress</span></div></article>
+  <article class="stat-tile tone-violet"><span class="stat-icon">{{ icon("activity") }}</span><div><strong>{{ stats.completed }}</strong><span>Completed</span></div></article>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>Your Projects</h2>
+    <form class="filter-bar" method="get" action="{{ url_for('dashboard.index') }}" role="search">
+      <label class="search-field">{{ icon("search", 16) }}
+        <input type="search" name="q" value="{{ query }}" placeholder="Search by project name" maxlength="160" aria-label="Search projects by name">
+      </label>
+      <select name="status" aria-label="Filter by status">
+        {% for value, label in status_filters.items() %}<option value="{{ value }}" {{ "selected" if value == status }}>{{ label }}</option>{% endfor %}
+      </select>
+      <select name="sort" aria-label="Sort by creation date">
+        {% for value, label in sort_options.items() %}<option value="{{ value }}" {{ "selected" if value == sort }}>{{ label }}</option>{% endfor %}
+      </select>
+      <button class="button button-secondary" type="submit">Apply</button>
+      {% if filtered %}<a class="text-link" href="{{ url_for('dashboard.index') }}">Clear</a>{% endif %}
+    </form>
   </div>
 
-  <section id="assistant" class="workspace-card"><h2>AI Assistant</h2><p>Coming in a future phase.</p></section>
-  <section id="profile" class="workspace-card"><h2>Profile</h2><p>{{ user.full_name }} · {{ user.email }}</p></section>
+  {% if cards %}
+  <div class="project-grid">
+    {% for card in cards %}
+    {% set project = card.project %}
+    <article class="project-tile">
+      <div class="project-media" aria-hidden="true">
+        {{ icon("building", 44) }}
+        <span class="status-pill status-{{ project.status }}">{{ status_labels.get(project.status, project.status) }}</span>
+      </div>
+      <div class="project-body">
+        <h3>{{ project.name }}</h3>
+        <p class="project-meta">{{ icon("map-pin", 15) }}<span>{{ project.location or "No location set" }}</span></p>
+        <div class="module-tiles">
+          <a href="{{ url_for('dashboard.project_section', project_id=project.id, section='ml-predictions') }}">{{ icon("chart", 18) }}<span>ML Predictions</span></a>
+          <a href="{{ url_for('dashboard.project_section', project_id=project.id, section='document-assistant') }}">{{ icon("file-search", 18) }}<span>RAG Assistant</span></a>
+          <a href="{{ url_for('dashboard.project_section', project_id=project.id, section='ai-agent') }}">{{ icon("bot", 18) }}<span>AI Agent</span></a>
+          <a href="{{ url_for('dashboard.project_section', project_id=project.id, section='communication') }}">{{ icon("mail", 18) }}<span>Email</span></a>
+        </div>
+        {% if card.progress is not none %}
+        <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ card.progress|round|int }}" aria-label="Project progress">
+          <span style="width: {{ [[card.progress|float, 0]|max, 100]|min }}%"></span>
+        </div>
+        <p class="progress-label">{{ card.progress|round(0)|int }}% complete</p>
+        {% endif %}
+        <p class="project-meta">{{ icon("calendar", 15) }}<span>Created: {{ project.created_at.strftime("%b %d, %Y") }}</span></p>
+        <a class="button button-primary button-block" href="{{ url_for('dashboard.project_workspace', project_id=project.id) }}">Open Project {{ icon("arrow-right", 16) }}</a>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% elif filtered %}
+  <div class="empty-state">{{ icon("search", 32) }}<h3>No matching projects</h3><p>Try a different name or status filter.</p><a class="button button-secondary" href="{{ url_for('dashboard.index') }}">Clear filters</a></div>
+  {% else %}
+  <div class="empty-state">{{ icon("folder", 32) }}<h3>No projects yet</h3><p>Create your first project to start uploading reports and getting predictions.</p>
+    <button class="button button-primary" type="button" data-open-dialog="create-project-dialog">{{ icon("plus", 18) }}Create New Project</button></div>
+  {% endif %}
 </section>
+
+<section class="banner">
+  <span class="stat-icon">{{ icon("lightbulb") }}</span>
+  <div><h2>Get Started</h2><p>Create a project, upload a site report, and SiteIntel will extract the details and generate predictions for you.</p></div>
+  <button class="button button-light" type="button" data-open-dialog="create-project-dialog">Create Project</button>
+</section>
+
+<dialog class="modal" id="create-project-dialog" aria-labelledby="create-project-title">
+  <form id="create-project" class="stack" novalidate>
+    <div class="modal-head"><h2 id="create-project-title">Create New Project</h2>
+      <button class="icon-button" type="button" data-close-dialog aria-label="Close">{{ icon("x") }}</button></div>
+    <label>Project name
+      <input name="name" required maxlength="160" autocomplete="off" placeholder="e.g. Riverside Apartments">
+    </label>
+    <label>Location <span class="muted">(optional)</span>
+      <input name="location" maxlength="200" autocomplete="off" placeholder="e.g. Austin, TX">
+    </label>
+    <p id="project-create-error" class="form-error" role="alert" hidden></p>
+    <div class="modal-actions">
+      <button class="button button-secondary" type="button" data-close-dialog>Cancel</button>
+      <button class="button button-primary" type="submit">Create Project</button>
+    </div>
+  </form>
+</dialog>
 {% endblock %}
 {% block page_scripts %}
-  <script defer src="{{ url_for('static', filename='js/project_create.js') }}"></script>
+<script defer src="{{ url_for('static', filename='js/project_create.js', v='20261114-shell') }}"></script>
 {% endblock %}

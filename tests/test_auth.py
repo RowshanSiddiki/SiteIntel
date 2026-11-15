@@ -131,7 +131,7 @@ class AuthenticationTests(unittest.TestCase):
         self._register()
         response = self._login()
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Welcome, Test Member", response.data)
+        self.assertIn(b"Welcome back, Test!", response.data)
         self.assertIn(b"member@example.com", response.data)
 
         response = self.client.post(

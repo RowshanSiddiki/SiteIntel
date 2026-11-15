@@ -238,6 +238,56 @@ It preserves previous snapshots and enforces uniqueness for automatic runs.
 Project-associated uploads create a `Document` row; existing unassociated
 reports are not automatically attached to a project.
 
+## Dashboard and project workspace
+
+`/dashboard/` lists the user's projects (stats, search, status filter, sort)
+and creates projects. Each project opens a workspace at
+`/dashboard/projects/<id>/` with sections `ml-predictions`,
+`document-assistant`, `expenses`, `ai-agent`, `communication`, `reports` and
+`settings`. Access control is unchanged (inaccessible projects return 404).
+
+Migration `6c1d4e7a9b20` adds `projects.location` and the `in_progress`
+status. Apply it with `flask --app siteintel:create_app db upgrade` (back up
+the database first).
+
+Later-phase integration points are the placeholder pages' containers:
+`#expenses-module`, `#ai-agent-module` and `#communication-module` in
+`templates/project/`.
+
+## Document Assistant (Phase 2)
+
+Project-scoped document Q&A at `/dashboard/projects/<id>/document-assistant/`.
+Users upload PDFs (agreement, quotation, specification, BOQ, other), which are
+extracted per page (scanned pages fall back to the existing Tesseract OCR,
+capped at `DOCUMENT_MAX_OCR_PAGES`), cleaned, chunked (about 1000 characters,
+150 overlap, never crossing a page), embedded and stored in `document_chunks`.
+
+- **Storage:** the existing `documents` table, with a `category` column that is
+  NULL for Phase 1 daily reports. Report code only reads `category IS NULL`
+  rows. Files live in `instance/project_documents/<project_id>/<uuid>.pdf`.
+- **Retrieval:** local sparse hashed-term embeddings plus BM25 ranking, with no
+  external service or new dependency. It is lexical, so it does not match
+  synonyms. Only the requesting project's completed documents are searched.
+- **Answers:** if `LLM_MODEL` and `LLM_API_KEY` are set, any OpenAI-compatible
+  chat endpoint (`LLM_BASE_URL`, default OpenAI) writes the answer from the
+  retrieved passages. Citations come from the retrieved chunks, never the model
+  text. Without an LLM, or if it fails, the top passages are shown with
+  citations. Unsupported questions return the fixed "could not find sufficient
+  information" message.
+- **Settings (env):** `LLM_API_KEY`, `LLM_MODEL`, `LLM_BASE_URL`,
+  `LLM_TIMEOUT_SECONDS`, `DOCUMENT_MAX_BYTES` (25 MB), `DOCUMENT_MAX_PAGES`
+  (300), `DOCUMENT_MAX_OCR_PAGES` (20), `DOCUMENT_UPLOAD_ROOT`.
+- **Phase 4 interface** (`siteintel.documents.qa`; callers must authorise the
+  project first): `search_project_documents(project_id, question)`,
+  `answer_project_question(project_id, question)` and
+  `get_document_sources(project_id, citations)`.
+- **Migration:** `7d2e8f31b4c5` is additive (5 nullable `documents` columns and
+  the `document_chunks` table). Back up, then run
+  `flask --app siteintel:create_app db upgrade`.
+
+Limitations: PDF only, processing runs inside the upload request, and the
+"enough evidence" threshold is a heuristic.
+
 ## Future modules
 
 Authentication, dashboard, and reports are separate blueprints; database

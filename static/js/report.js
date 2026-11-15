@@ -1,18 +1,27 @@
+// Project workspace controller. Each workspace page renders a subset of the
+// elements below, so every lookup is optional and guarded.
 (() => {
-  const form = document.querySelector("#report-upload-form");
-  if (!(form instanceof HTMLFormElement)) return;
-  const token = document.querySelector('meta[name="csrf-token"]')?.content || "";
-  const projectId = document.querySelector("#project-workspace").dataset.projectId;
-  const fileInput = document.querySelector("#report-image");
-  const previewWrap = document.querySelector("#report-preview-wrap");
-  const preview = document.querySelector("#report-preview");
-  const pdfPreview = document.querySelector("#report-pdf-preview");
-  const uploadButton = document.querySelector("#extract-report-button");
-  const loading = document.querySelector("#extract-report-loading");
-  const error = document.querySelector("#report-error");
-  const workspaceError = document.querySelector("#workspace-error");
-  const results = document.querySelector("#report-results");
-  const reviewForm = document.querySelector("#review-form");
+  const root = document.querySelector("#project-workspace");
+  if (!root) return;
+  const $ = (selector) => document.querySelector(selector);
+  const token = $('meta[name="csrf-token"]')?.content || "";
+  const projectId = root.dataset.projectId;
+  const form = $("#report-upload-form");
+  const fileInput = $("#report-image");
+  const previewWrap = $("#report-preview-wrap");
+  const preview = $("#report-preview");
+  const pdfPreview = $("#report-pdf-preview");
+  const uploadButton = $("#extract-report-button");
+  const loading = $("#extract-report-loading");
+  const error = $("#report-error");
+  const workspaceError = $("#workspace-error");
+  const results = $("#report-results");
+  const reviewForm = $("#review-form");
+  const predictionsBox = $("#workspace-predictions");
+  const reportList = $("#report-list");
+  const historyBox = $("#history-content");
+  const overviewReports = $("#overview-reports");
+  const overviewPredictions = $("#overview-predictions");
   let project = null;
   let report = null;
   let previewUrl = null;
@@ -29,6 +38,7 @@
   };
   const json = (value) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(value) });
   const message = (element, value) => {
+    if (!element) return;
     element.textContent = value;
     element.hidden = !value;
   };
@@ -41,6 +51,7 @@
   };
   const date = (value) => value ? value.slice(0, 10) : "";
   const displayPreview = (url, isPdf) => {
+    if (!previewWrap) return;
     previewWrap.hidden = false;
     preview.hidden = isPdf;
     pdfPreview.hidden = !isPdf;
@@ -50,21 +61,21 @@
 
   const hideReview = () => {
     report = null;
-    results.hidden = true;
-    previewWrap.hidden = true;
+    if (results) results.hidden = true;
+    if (previewWrap) previewWrap.hidden = true;
   };
 
   const renderReview = (data) => {
     // Review applies only until the report is confirmed.
-    if (data.reviewed) { hideReview(); return; }
+    if (!results || data.reviewed) { hideReview(); return; }
     report = data;
-    const container = document.querySelector("#extracted-information");
+    const container = $("#extracted-information");
     container.replaceChildren();
-    document.querySelector("#original-extracted-text").textContent = data.extracted_text;
-    document.querySelector("#ocr-empty-message").hidden = Object.keys(data.fields).length > 0;
-    document.querySelector("#review-status").textContent = "Needs review";
-    document.querySelector("#confirm-report").hidden = !data.editable;
-    document.querySelector("#review-message").textContent = data.editable ? "" : "Only a project owner or editor can confirm information.";
+    $("#original-extracted-text").textContent = data.extracted_text;
+    $("#ocr-empty-message").hidden = Object.keys(data.fields).length > 0;
+    $("#review-status").textContent = "Needs review";
+    $("#confirm-report").hidden = !data.editable;
+    $("#review-message").textContent = data.editable ? "" : "Only a project owner or editor can confirm information.";
     for (const [label, value] of Object.entries(data.fields)) {
       const wrapper = document.createElement("label");
       wrapper.textContent = label;
@@ -87,7 +98,7 @@
       const data = await api(`/api/reports/documents/${id}`);
       if (!project || !project.documents.some((item) => item.id === id)) return;
       renderReview(data);
-      if (!data.reviewed) results.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (!data.reviewed) results?.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (failure) { message(error, failure.message); }
   };
 
@@ -104,11 +115,13 @@
     return list;
   };
 
+  // Overview shows the newest events first; the API returns oldest first.
   const renderHistory = (items) => {
-    const history = document.querySelector("#history-content");
-    history.replaceChildren();
-    if (!items.length) text(history, "p", "No activity yet.", "empty-copy");
-    for (const item of items) {
+    if (!historyBox) return;
+    historyBox.replaceChildren();
+    const recent = items.slice().reverse().slice(0, 6);
+    if (!recent.length) text(historyBox, "p", "No activity yet.", "empty-copy");
+    for (const item of recent) {
       const row = document.createElement("div");
       row.className = "history-item";
       const info = document.createElement("span");
@@ -116,19 +129,39 @@
       if (item.report) text(info, "small", item.report);
       row.append(info);
       text(row, "time", date(item.time), "muted");
-      history.append(row);
+      historyBox.append(row);
+    }
+  };
+
+  const renderPredictionSummary = (data) => {
+    if (!overviewPredictions) return;
+    overviewPredictions.replaceChildren();
+    if (!data.current.length) {
+      text(overviewPredictions, "p", "Predictions appear here once a report is confirmed.", "empty-copy");
+      return;
+    }
+    for (const item of data.current) {
+      const row = document.createElement("div");
+      row.className = "list-row";
+      const info = document.createElement("span");
+      text(info, "strong", item.model_name);
+      text(info, "small", item.document_name);
+      row.append(info);
+      if (item.result) text(row, "strong", resultText(item), "result-inline");
+      else text(row, "span", item.status === "unavailable" ? "Unavailable" : "Needs information", "prediction-status pending");
+      overviewPredictions.append(row);
     }
   };
 
   const renderPredictions = (data) => {
-    const container = document.querySelector("#workspace-predictions");
-    container.replaceChildren();
-    container.parentElement.querySelectorAll(".earlier-predictions").forEach((item) => item.remove());
+    if (!predictionsBox) return;
+    predictionsBox.replaceChildren();
+    predictionsBox.parentElement.querySelectorAll(".earlier-predictions").forEach((item) => item.remove());
     // The API returns exactly one current prediction per model, so a model can
     // never show a result and a missing-information form together.
     const current = data.current;
     if (!current.length) {
-      text(container, "p", "Confirm a report to see predictions.", "empty-copy");
+      text(predictionsBox, "p", "Upload and confirm a report to see predictions.", "empty-copy");
       return;
     }
     for (const item of current) {
@@ -198,7 +231,7 @@
           catch (failure) { message(workspaceError, failure.message); button.disabled = false; }
         });
       }
-      container.append(card);
+      predictionsBox.append(card);
     }
     const currentIds = new Set(current.map((item) => item.id));
     const earlier = data.history.filter((item) => item.status === "complete" && !currentIds.has(item.id));
@@ -212,42 +245,44 @@
         entry.append(inputList(item));
         details.append(entry);
       }
-      container.after(details);
+      predictionsBox.after(details);
     }
   };
 
   const refreshPredictions = async () => {
-    if (!project) return;
+    if (!project || !(predictionsBox || overviewPredictions)) return;
     const id = project.id;
     const data = await api(`/api/projects/${id}/predictions`);
-    if (project?.id === id) renderPredictions(data);
+    if (project?.id !== id) return;
+    renderPredictions(data);
+    renderPredictionSummary(data);
+  };
+
+  const reportRow = (documentItem, withReview) => {
+    const row = document.createElement("div"); row.className = "list-row";
+    const info = document.createElement("span");
+    text(info, "strong", documentItem.name);
+    text(info, "small", `${date(documentItem.created_at)} · ${documentItem.reviewed ? "Confirmed" : "Needs review"}`);
+    row.append(info);
+    if (withReview && !documentItem.reviewed) {
+      const button = text(row, "button", "Review", "text-button");
+      button.type = "button"; button.addEventListener("click", () => openReport(documentItem.id));
+    }
+    return row;
   };
 
   const renderProject = (data) => {
     project = data;
-    document.querySelector("#workspace-title").textContent = data.name;
-    document.querySelector("#workspace-content").hidden = false;
-    document.querySelector("#analysis-link").href = "#project-analysis";
-    form.hidden = !data.editable;
-    const overview = document.querySelector("#overview-content");
-    overview.replaceChildren();
-    text(overview, "p", data.description || "Construction project");
-    text(overview, "span", data.status, "status-badge");
-    const list = document.querySelector("#report-list");
-    list.replaceChildren();
-    text(list, "h4", "Uploaded reports");
-    if (!data.documents.length) text(list, "p", "No reports uploaded yet.", "empty-copy");
-    for (const documentItem of data.documents) {
-      const row = document.createElement("div"); row.className = "list-row";
-      const info = document.createElement("span");
-      text(info, "strong", documentItem.name);
-      text(info, "small", `${date(documentItem.created_at)} · ${documentItem.reviewed ? "Confirmed" : "Needs review"}`);
-      row.append(info);
-      if (!documentItem.reviewed) {
-        const button = text(row, "button", "Review", "text-button");
-        button.type = "button"; button.addEventListener("click", () => openReport(documentItem.id));
-      }
-      list.append(row);
+    if (form) form.hidden = !data.editable;
+    if (reportList) {
+      reportList.replaceChildren();
+      if (!data.documents.length) text(reportList, "p", "No reports uploaded yet.", "empty-copy");
+      for (const documentItem of data.documents) reportList.append(reportRow(documentItem, true));
+    }
+    if (overviewReports) {
+      overviewReports.replaceChildren();
+      if (!data.documents.length) text(overviewReports, "p", "No reports uploaded yet.", "empty-copy");
+      for (const documentItem of data.documents.slice(0, 3)) overviewReports.append(reportRow(documentItem, false));
     }
     renderHistory(data.history);
   };
@@ -255,7 +290,7 @@
   const loadProject = async (id, keepReview = false) => {
     const serial = ++generation;
     message(workspaceError, "");
-    if (!keepReview) { results.hidden = true; previewWrap.hidden = true; report = null; }
+    if (!keepReview) hideReview();
     try {
       const data = await api(`/api/projects/${encodeURIComponent(id)}`);
       if (serial !== generation) return;
@@ -264,57 +299,63 @@
     } catch (failure) { if (serial === generation) message(workspaceError, failure.message); }
   };
 
-  fileInput.addEventListener("change", () => {
-    uploadId = null;
-    results.hidden = true;
-    message(error, "");
-    uploadButton.disabled = true;
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    previewUrl = null; previewWrap.hidden = true;
-    const file = fileInput.files?.[0];
-    if (!file) return;
-    const extension = file.name.split(".").pop().toLowerCase();
-    if (!["jpg", "jpeg", "png", "pdf"].includes(extension) || file.size > 10 * 1024 * 1024) {
-      message(error, "Choose a JPG, PNG, or PDF report no larger than 10 MB.");
-      fileInput.value = ""; return;
-    }
-    previewUrl = URL.createObjectURL(file);
-    uploadId = crypto.randomUUID().replaceAll("-", "");
-    displayPreview(previewUrl, extension === "pdf");
-    uploadButton.disabled = false;
-  });
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const file = fileInput.files?.[0];
-    if (!file || !project?.editable || uploadButton.disabled) return;
-    const id = project.id;
-    uploadButton.disabled = true; loading.hidden = false; message(error, "");
-    const data = new FormData(); data.append("image", file); data.append("project_id", id);
-    try {
-      const response = await api("/api/reports/extract", { method: "POST", body: data, headers: { "Idempotency-Key": uploadId } });
-      if (project?.id !== id) return;
-      await loadProject(id);
-      await openReport(response.document_id);
-      fileInput.value = "";
-    } catch (failure) { message(error, failure.message); }
-    finally { loading.hidden = true; uploadButton.disabled = !fileInput.files?.length; }
-  });
-  reviewForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    if (!report || !project?.editable) return;
-    const activeReport = report;
-    const projectId = project.id;
-    const button = document.querySelector("#confirm-report");
-    if (button.disabled) return;
-    button.disabled = true;
-    const fields = Object.fromEntries(new FormData(reviewForm));
-    try {
-      await api(`/api/reports/documents/${activeReport.document_id}/confirm`, json({ fields, review_id: activeReport.review_id }));
-      if (project?.id !== projectId || report?.document_id !== activeReport.document_id) return;
-      hideReview();
-      await loadProject(projectId);
-    } catch (failure) { document.querySelector("#review-message").textContent = failure.message; }
-    finally { button.disabled = false; }
-  });
+  if (form) {
+    fileInput.addEventListener("change", () => {
+      uploadId = null;
+      results.hidden = true;
+      message(error, "");
+      uploadButton.disabled = true;
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      previewUrl = null; previewWrap.hidden = true;
+      const file = fileInput.files?.[0];
+      if (!file) return;
+      const extension = file.name.split(".").pop().toLowerCase();
+      if (!["jpg", "jpeg", "png", "pdf"].includes(extension) || file.size > 10 * 1024 * 1024) {
+        message(error, "Choose a JPG, PNG, or PDF report no larger than 10 MB.");
+        fileInput.value = ""; return;
+      }
+      previewUrl = URL.createObjectURL(file);
+      uploadId = crypto.randomUUID().replaceAll("-", "");
+      displayPreview(previewUrl, extension === "pdf");
+      uploadButton.disabled = false;
+    });
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const file = fileInput.files?.[0];
+      if (!file || !project?.editable || uploadButton.disabled) return;
+      const id = project.id;
+      uploadButton.disabled = true; loading.hidden = false; message(error, "");
+      const data = new FormData(); data.append("image", file); data.append("project_id", id);
+      try {
+        const response = await api("/api/reports/extract", { method: "POST", body: data, headers: { "Idempotency-Key": uploadId } });
+        if (project?.id !== id) return;
+        await loadProject(id);
+        await openReport(response.document_id);
+        fileInput.value = "";
+      } catch (failure) { message(error, failure.message); }
+      finally { loading.hidden = true; uploadButton.disabled = !fileInput.files?.length; }
+    });
+  }
+  if (reviewForm) {
+    reviewForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!report || !project?.editable) return;
+      const activeReport = report;
+      const id = project.id;
+      const button = $("#confirm-report");
+      if (button.disabled) return;
+      button.disabled = true;
+      const fields = Object.fromEntries(new FormData(reviewForm));
+      try {
+        await api(`/api/reports/documents/${activeReport.document_id}/confirm`, json({ fields, review_id: activeReport.review_id }));
+        if (project?.id !== id || report?.document_id !== activeReport.document_id) return;
+        hideReview();
+        // Results live on the ML Predictions page, so continue there.
+        if (root.dataset.mlUrl) { location.assign(root.dataset.mlUrl); return; }
+        await loadProject(id);
+      } catch (failure) { $("#review-message").textContent = failure.message; }
+      finally { button.disabled = false; }
+    });
+  }
   loadProject(projectId).catch((failure) => message(workspaceError, failure.message));
 })();

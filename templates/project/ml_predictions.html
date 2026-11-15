@@ -1,0 +1,13 @@
+{% extends "project/base.html" %}
+{% block section %}
+<section class="panel">
+  <div class="panel-head">
+    <h2>ML Predictions</h2>
+    <a class="text-link" href="{{ url_for('dashboard.project_section', project_id=project.id, section='reports') }}">Upload a report</a>
+  </div>
+  <p class="muted">Predictions are generated automatically from your confirmed reports. Only missing details are requested.</p>
+  <div id="workspace-predictions" class="ml-grid"><p class="empty-copy">Loading…</p></div>
+</section>
+<p class="muted small-note">Need a one-off estimate? <a class="text-link" href="{{ url_for('dashboard.ml_predictions') }}">Open the standalone calculators</a>.</p>
+{% endblock %}
+{% block page_scripts %}<script defer src="{{ url_for('static', filename='js/report.js', v='20261114-shell') }}"></script>{% endblock %}

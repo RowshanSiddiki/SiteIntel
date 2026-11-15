@@ -1,44 +1,87 @@
+{% from "_icons.html" import icon %}
+{# Error pages use the plain layout so rendering them never queries the database. #}
+{% set signed_in = not error_page and current_user.is_authenticated %}
 <!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#182e48">
+    <meta name="theme-color" content="#14284b">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}SiteIntel{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/siteintel.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css', v='20261115-docs') }}">
     <script defer src="{{ url_for('static', filename='js/auth.js') }}"></script>
+    {% if signed_in %}<script defer src="{{ url_for('static', filename='js/shell.js', v='20261114-shell') }}"></script>{% endif %}
   </head>
-  <body class="{{ 'workspace-body' if current_user.is_authenticated else 'public-body' }}">
+  <body class="{{ 'app-body' if signed_in else 'public-body' }}">
+    {% if signed_in %}
+    {% set pending_total, pending_documents = pending_reviews() %}
+    {% set name_parts = current_user.full_name.split() %}
+    <div class="app-shell">
+      <aside class="app-sidebar" id="app-sidebar" aria-label="Main navigation">
+        <a class="app-brand" href="{{ url_for('dashboard.index') }}" aria-label="SiteIntel dashboard">
+          <span class="app-brand-mark">{{ icon("building", 26) }}</span>
+          <span><strong>SiteIntel</strong><small>Build Smarter</small></span>
+        </a>
+        {% block sidebar_nav %}
+        <nav class="app-nav">
+          <a href="{{ url_for('dashboard.index') }}" {% if request.endpoint == 'dashboard.index' %}class="active" aria-current="page"{% endif %}>{{ icon("home") }}<span>Dashboard</span></a>
+          <a href="{{ url_for('dashboard.account_settings') }}" {% if request.endpoint == 'dashboard.account_settings' %}class="active" aria-current="page"{% endif %}>{{ icon("settings") }}<span>Settings</span></a>
+          <a href="{{ url_for('dashboard.help_page') }}" {% if request.endpoint == 'dashboard.help_page' %}class="active" aria-current="page"{% endif %}>{{ icon("help") }}<span>Help</span></a>
+        </nav>
+        {% endblock %}
+        <p class="app-tagline">Smarter Construction.<br>Brighter Future.</p>
+      </aside>
+      <div class="app-scrim" data-nav-close hidden></div>
+      <div class="app-main">
+        <header class="app-topbar">
+          <button class="icon-button nav-toggle" type="button" aria-controls="app-sidebar" aria-expanded="false" aria-label="Open navigation">{{ icon("menu") }}</button>
+          <a class="topbar-brand" href="{{ url_for('dashboard.index') }}">SiteIntel</a>
+          <div class="topbar-actions">
+            <details class="menu notifications">
+              <summary class="icon-button" aria-label="Notifications{% if pending_total %} ({{ pending_total }} new){% endif %}">
+                {{ icon("bell") }}{% if pending_total %}<span class="notification-dot" aria-hidden="true"></span>{% endif %}
+              </summary>
+              <div class="menu-panel">
+                <p class="menu-title">Notifications</p>
+                {% for document in pending_documents %}
+                <a class="menu-item" href="{{ url_for('dashboard.project_section', project_id=document.project_id, section='reports') }}">
+                  <strong>{{ document.file_name }}</strong>
+                  <small>{{ document.project_name }} · needs review</small>
+                </a>
+                {% else %}
+                <p class="menu-empty">No new notifications.</p>
+                {% endfor %}
+                {% if pending_total > pending_documents|length %}<p class="menu-empty">+ {{ pending_total - pending_documents|length }} more to review</p>{% endif %}
+              </div>
+            </details>
+            <details class="menu user-menu">
+              <summary>
+                <span class="avatar" aria-hidden="true">{{ (name_parts[0][0] ~ (name_parts[1][0] if name_parts|length > 1 else ''))|upper }}</span>
+                <span class="user-name">{{ current_user.full_name }}</span>
+                {{ icon("chevron-down", 16) }}
+              </summary>
+              <div class="menu-panel">
+                <p class="menu-title">{{ current_user.full_name }}<small>{{ current_user.email }}</small></p>
+                <a class="menu-item" href="{{ url_for('dashboard.account_settings') }}"><strong>Account settings</strong></a>
+                <form action="{{ url_for('auth.logout') }}" method="post">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="menu-item" type="submit"><strong>Logout</strong></button>
+                </form>
+              </div>
+            </details>
+          </div>
+        </header>
+    {% else %}
     <header class="topbar">
       <a class="brand" href="{{ url_for('index') }}" aria-label="SiteIntel home">
         <span class="brand-mark" aria-hidden="true">▥</span>
         <span>SiteIntel</span>
       </a>
-      {% if current_user.is_authenticated %}
-        <a class="header-profile" href="{{ url_for('dashboard.index') }}#profile" aria-label="Profile">{{ current_user.full_name[:1]|upper }}</a>
-      {% endif %}
     </header>
-    {% if current_user.is_authenticated %}
-    <aside class="sidebar" aria-label="Main navigation">
-      <p class="sidebar-label">Workspace</p>
-      <nav>
-        <a href="{{ url_for('dashboard.index') }}#dashboard"><span aria-hidden="true">▦</span> Dashboard</a>
-        <a href="{{ url_for('dashboard.index') }}#my-projects"><span aria-hidden="true">▱</span> My Projects</a>
-        <a id="analysis-link" href="{{ url_for('dashboard.ml_predictions') }}"><span aria-hidden="true">▥</span> Data Analysis</a>
-        <a href="{{ url_for('dashboard.index') }}#assistant"><span aria-hidden="true">✧</span> AI Assistant</a>
-      </nav>
-      <p class="sidebar-label account-label">Account</p>
-      <nav>
-        <a href="{{ url_for('dashboard.index') }}#profile"><span aria-hidden="true">♙</span> Profile</a>
-        <form action="{{ url_for('auth.logout') }}" method="post">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button type="submit"><span aria-hidden="true">↪</span> Logout</button>
-        </form>
-      </nav>
-    </aside>
     {% endif %}
-    <main class="page-shell">
+    <main class="{{ 'app-content' if signed_in else 'page-shell' }}">
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
           <section class="flash-stack" aria-live="polite">
@@ -50,7 +93,11 @@
       {% endwith %}
       {% block content %}{% endblock %}
     </main>
-    <footer class="footer">SiteIntel · Construction intelligence workspace</footer>
+    <footer class="footer">SiteIntel · Construction intelligence platform</footer>
+    {% if signed_in %}
+      </div>
+    </div>
+    {% endif %}
     {% block page_scripts %}{% endblock %}
   </body>
 </html>

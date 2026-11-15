@@ -16,7 +16,15 @@ from siteintel.ml.predictors import (
     predict_concrete_strength,
     predict_delay_risk,
 )
-from siteintel.projects import ConstructionRecord, Document, Expense, Project, get_accessible_project
+from siteintel.projects import (
+    PROJECT_STATUSES,
+    ConstructionRecord,
+    Document,
+    Expense,
+    Project,
+    get_accessible_project,
+    get_owned_project,
+)
 from siteintel.reports.models import ReportReview
 
 
@@ -109,6 +117,38 @@ def delay_risk():
     return _predict(predict_delay_risk, threshold=threshold)
 
 
+PROJECT_TEXT_LIMITS = {"name": 160, "location": 200, "description": 2000}
+
+
+def _project_fields(values, *, require_name):
+    """Validate project values shared by creation and the settings form."""
+    allowed = {*PROJECT_TEXT_LIMITS, "status"}
+    if not isinstance(values, dict) or not set(values) <= allowed:
+        return None, "Provide valid project details."
+    cleaned = {}
+    for field, limit in PROJECT_TEXT_LIMITS.items():
+        if field not in values:
+            continue
+        value = values[field]
+        if value is None and field != "name":
+            value = ""
+        if not isinstance(value, str):
+            return None, "Provide valid project details."
+        value = value.strip()
+        if field == "name" and not value:
+            return None, f"Project name must be 1 to {limit} characters."
+        if len(value) > limit:
+            return None, f"Project {field} must be at most {limit} characters."
+        cleaned[field] = value or None
+    if require_name and "name" not in cleaned:
+        return None, "Provide a project name."
+    if "status" in values:
+        if values["status"] not in PROJECT_STATUSES:
+            return None, "Choose a valid project status."
+        cleaned["status"] = values["status"]
+    return cleaned, None
+
+
 @ml_bp.route("/projects", methods=["GET", "POST"])
 @require_authenticated_api
 def projects():
@@ -117,12 +157,10 @@ def projects():
         values, error = _request_values()
         if error is not None:
             return error
-        if set(values) != {"name"} or not isinstance(values["name"], str):
-            return _error("invalid_input", "Provide a project name.", 400)
-        name = values["name"].strip()
-        if not name or len(name) > 160:
-            return _error("invalid_input", "Project name must be 1 to 160 characters.", 400)
-        project = Project(owner_id=user_id, name=name)
+        cleaned, problem = _project_fields(values, require_name=True)
+        if problem:
+            return _error("invalid_input", problem, 400)
+        project = Project(owner_id=user_id, **cleaned)
         db.session.add(project)
         db.session.commit()
         return jsonify({"id": project.id, "name": project.name, "editable": True,
@@ -173,6 +211,30 @@ def project_predictions(project_id):
     })
 
 
+@ml_bp.patch("/projects/<int:project_id>")
+@require_authenticated_api
+def update_project(project_id):
+    user_id = int(current_user.get_id())
+    project = get_owned_project(user_id, project_id)
+    if project is None:
+        if get_accessible_project(user_id, project_id) is None:
+            return _error("project_not_found", "Project not found.", 404)
+        return _error("forbidden", "Only the project owner can change project settings.", 403)
+    values, error = _request_values()
+    if error is not None:
+        return error
+    cleaned, problem = _project_fields(values, require_name=False)
+    if problem or not cleaned:
+        return _error("invalid_input", problem or "Provide the details to update.", 400)
+    for field, value in cleaned.items():
+        setattr(project, field, value)
+    if "status" in cleaned:
+        project.completed_at = db.func.now() if cleaned["status"] == "completed" else None
+    db.session.commit()
+    return jsonify({"id": project.id, "name": project.name, "location": project.location,
+                    "description": project.description, "status": project.status})
+
+
 @ml_bp.get("/projects/<int:project_id>")
 @require_authenticated_api
 def project_details(project_id):
@@ -181,7 +243,7 @@ def project_details(project_id):
     if project is None:
         return _error("project_not_found", "Project not found.", 404)
     documents = db.session.scalars(
-        db.select(Document).where(Document.project_id == project_id).order_by(Document.id.desc())
+        db.select(Document).where(Document.project_id == project_id, Document.reports_only()).order_by(Document.id.desc())
     ).all()
     reviewed = set(db.session.scalars(
         db.select(ReportReview.document_id).join(Document)
@@ -239,7 +301,7 @@ def project_details(project_id):
             history.append({**event, "time": event["time"].isoformat()})
     return jsonify({
         "id": project.id, "name": project.name, "description": project.description,
-        "status": project.status, "created_at": project.created_at.isoformat(),
+        "location": project.location, "status": project.status, "created_at": project.created_at.isoformat(),
         "editable": get_accessible_project(user_id, project_id, "editor") is not None,
         "documents": [{
             "id": document.id, "name": document.file_name,

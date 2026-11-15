@@ -1,0 +1,31 @@
+{% extends "project/base.html" %}
+{% from "_icons.html" import icon %}
+{% block section %}
+{# Phase 3 integration point: mount expense entry, bills and cost analysis on #expenses-module. #}
+<div id="expenses-module" data-phase="3">
+  <section class="panel">
+    <div class="panel-head"><h2>Financial overview</h2><span class="badge">Coming soon</span></div>
+    <p class="muted">Cost analysis and quotation-versus-actual comparisons will appear here once the finance module is available.</p>
+    <div class="feature-grid">
+      {% for label, glyph in [("Expense recording", "wallet"), ("Contractor bills", "file-text"), ("Material purchases", "folder"), ("Quotation vs actual", "chart"), ("Cost analysis", "activity"), ("Financial dashboard", "dashboard")] %}
+      <div class="feature-tile is-disabled">{{ icon(glyph) }}<div><h3>{{ label }}</h3></div></div>
+      {% endfor %}
+    </div>
+  </section>
+  <section class="panel">
+    <div class="panel-head"><h2>Recorded expenses</h2></div>
+    {% if expenses %}
+    <div class="table-wrap"><table class="data-table">
+      <thead><tr><th>Date</th><th>Description</th><th class="num">Amount</th></tr></thead>
+      <tbody>
+      {% for expense in expenses %}
+        <tr><td>{{ expense.expense_date }}</td><td>{{ expense.description }}<small class="muted"> · {{ expense.category }}</small></td><td class="num">{{ expense.amount }} {{ expense.currency }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% else %}
+    <div class="empty-state compact">{{ icon("wallet", 28) }}<h3>No expenses recorded</h3><p>Expenses recorded for this project will be listed here.</p></div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

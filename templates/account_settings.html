@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Account settings · SiteIntel{% endblock %}
+{% block content %}
+<section class="page-head"><div><h1>Settings</h1><p class="muted">Your account details.</p></div></section>
+<section class="panel">
+  <dl class="info-list">
+    <div><dt>Name</dt><dd>{{ current_user.full_name }}</dd></div>
+    <div><dt>Email</dt><dd>{{ current_user.email }}</dd></div>
+  </dl>
+  <p class="muted">Project details are edited from each project's Project Settings page.</p>
+</section>
+{% endblock %}

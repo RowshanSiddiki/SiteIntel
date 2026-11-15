@@ -50,6 +50,7 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
 
     from siteintel.auth import auth_bp
     from siteintel.dashboard import dashboard_bp
+    from siteintel.documents import documents_bp
     from siteintel.ml.routes import ml_bp
     from siteintel.ml import models as ml_models
     from siteintel.projects import project_models
@@ -60,6 +61,7 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(ml_bp)
     app.register_blueprint(reports_bp)
+    app.register_blueprint(documents_bp)
 
     @app.get("/")
     def index():
@@ -80,7 +82,7 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
                     }
                 }
             ), 400
-        return render_template("errors/csrf.html", reason=error.description), 400
+        return render_template("errors/csrf.html", reason=error.description, error_page=True), 400
 
     @app.errorhandler(RequestEntityTooLarge)
     def handle_request_too_large(error: RequestEntityTooLarge):
@@ -100,6 +102,7 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
         return render_template(
             "errors/500.html",
             message="The uploaded file exceeds the maximum allowed size.",
+            error_page=True,
         ), 413
 
     @app.errorhandler(SQLAlchemyError)
@@ -107,14 +110,22 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
         current_app.logger.exception(
             "Database operation failed (%s)", type(error).__name__
         )
-        db.session.rollback()
-        return (
-            render_template(
-                "errors/500.html",
-                message="A database error occurred. Please try again.",
-            ),
-            500,
-        )
+        try:
+            db.session.rollback()
+        except SQLAlchemyError:
+            current_app.logger.exception("Session rollback failed")
+        message = "A database error occurred. Please try again."
+        try:
+            return (
+                render_template(
+                    "errors/500.html", message=message, error_page=True
+                ),
+                500,
+            )
+        except Exception:
+            # The error page must never raise a second error.
+            current_app.logger.exception("Could not render the error page")
+            return message, 500
 
     @app.cli.command("db-init")
     def db_init_command() -> None:

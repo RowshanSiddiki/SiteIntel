@@ -1,0 +1,23 @@
+{% extends "project/base.html" %}
+{% from "_icons.html" import icon %}
+{% block section %}
+{# Contact data model and sending are not built yet; mount contacts, drafts and history on #communication-module. #}
+<div id="communication-module">
+  <section class="panel">
+    <div class="panel-head"><h2>Contacts</h2><span class="badge">Coming soon</span></div>
+    <div class="feature-grid">
+      {% for label in ["Engineers", "Contractors", "Suppliers & shops"] %}
+      <div class="feature-tile is-disabled">{{ icon("user") }}<div><h3>{{ label }}</h3><p>No contacts added.</p></div></div>
+      {% endfor %}
+    </div>
+  </section>
+  <section class="panel">
+    <div class="panel-head"><h2>Email drafts</h2></div>
+    <div class="empty-state compact">{{ icon("mail", 28) }}<h3>No drafts</h3><p>Drafts will appear here. Sending email is not enabled yet.</p></div>
+  </section>
+  <section class="panel">
+    <div class="panel-head"><h2>Sent email history</h2></div>
+    <div class="empty-state compact"><h3>No emails sent</h3><p>Sent messages for this project will be listed here.</p></div>
+  </section>
+</div>
+{% endblock %}

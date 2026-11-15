@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ project.name }} · SiteIntel{% endblock %}
+{% block sidebar_nav %}
+<nav class="app-nav" aria-label="Project navigation">
+  <a class="nav-back" href="{{ url_for('dashboard.index') }}">{{ icon("arrow-left") }}<span>All projects</span></a>
+  <p class="nav-heading" title="{{ project.name }}">{{ project.name }}</p>
+  <a href="{{ url_for('dashboard.project_workspace', project_id=project.id) }}" {% if section == 'overview' %}class="active" aria-current="page"{% endif %}>{{ icon("dashboard") }}<span>Overview</span></a>
+  {% for slug, (label, glyph, _template) in sections.items() %}
+  <a href="{{ url_for('dashboard.project_section', project_id=project.id, section=slug) }}" {% if section == slug %}class="active" aria-current="page"{% endif %}>{{ icon(glyph) }}<span>{{ label }}</span></a>
+  {% endfor %}
+</nav>
+{% endblock %}
+{% block content %}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <a href="{{ url_for('dashboard.index') }}">Dashboard</a><span aria-hidden="true">/</span>
+  {% if section == 'overview' %}<span aria-current="page">{{ project.name }}</span>
+  {% else %}<a href="{{ url_for('dashboard.project_workspace', project_id=project.id) }}">{{ project.name }}</a><span aria-hidden="true">/</span><span aria-current="page">{{ sections[section][0] }}</span>{% endif %}
+</nav>
+<section class="project-header">
+  <div>
+    <h1>{{ project.name }}</h1>
+    <p class="project-meta">{{ icon("map-pin", 15) }}<span>{{ project.location or "No location set" }}</span></p>
+  </div>
+  <span class="status-pill status-{{ project.status }}">{{ status_labels.get(project.status, project.status) }}</span>
+</section>
+<div id="project-workspace" data-project-id="{{ project.id }}"
+     data-ml-url="{{ url_for('dashboard.project_section', project_id=project.id, section='ml-predictions') }}"
+     data-reports-url="{{ url_for('dashboard.project_section', project_id=project.id, section='reports') }}">
+  <p id="workspace-error" class="form-error" role="alert" hidden></p>
+  {% block section %}{% endblock %}
+</div>
+{% endblock %}

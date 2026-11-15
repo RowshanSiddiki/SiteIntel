@@ -1,0 +1,75 @@
+{% extends "project/base.html" %}
+{% from "_icons.html" import icon %}
+{% block section %}
+<div id="document-assistant" class="doc-assistant">
+  <section class="panel doc-hero">
+    <div class="doc-hero-head">
+      <h2>Document Assistant</h2>
+      <p class="muted">Individual Project Workspace</p>
+    </div>
+    <div class="doc-tiles">
+      <a class="doc-tile" href="#doc-upload-panel">{{ icon("upload", 28) }}<h3>Upload Documents</h3><p>PDF and supported formats</p></a>
+      <a class="doc-tile" href="#doc-library-panel">{{ icon("folder", 28) }}<h3>Document Library</h3><p>Organized by project</p></a>
+      <a class="doc-tile" href="#doc-search-panel">{{ icon("file-search", 28) }}<h3>RAG Retrieval</h3><p>Find relevant information</p></a>
+      <a class="doc-tile" href="#doc-ask-panel">{{ icon("message", 28) }}<h3>Document Q&amp;A</h3><p>Ask questions with evidence</p></a>
+    </div>
+    <hr class="doc-divider">
+    <div class="doc-example">
+      <h3>Example question</h3>
+      <button type="button" class="doc-example-question" id="doc-example-question">What is the agreed payment schedule in the construction agreement?</button>
+      <h3>Expected answer</h3>
+      <p class="muted">The answer should include the relevant information and a source citation containing the document name and page number.</p>
+    </div>
+  </section>
+
+  <section class="panel" id="doc-upload-panel">
+    <div class="panel-head"><h2>Upload documents</h2></div>
+    <form id="doc-upload-form" class="doc-upload-form" novalidate>
+      <label>Category
+        <select id="doc-category" name="category" required>
+          <option value="">Choose a category</option>
+          <option value="agreement">Construction Agreement</option>
+          <option value="quotation">Contractor Quotation</option>
+          <option value="specification">Construction Specification</option>
+          <option value="boq">Bill of Quantities (BOQ)</option>
+          <option value="other">Other Reference Documents</option>
+        </select>
+      </label>
+      <label>PDF file
+        <input id="doc-file" name="file" type="file" accept=".pdf,application/pdf" required>
+      </label>
+      <button id="doc-upload-button" class="button button-primary" type="submit">Upload document</button>
+    </form>
+    <progress id="doc-upload-progress" max="100" value="0" hidden></progress>
+    <p id="doc-upload-status" class="muted" role="status" hidden></p>
+    <p id="doc-upload-error" class="form-error" role="alert" hidden></p>
+  </section>
+
+  <section class="panel" id="doc-library-panel">
+    <div class="panel-head"><h2>Document library</h2></div>
+    <div id="doc-library"><p class="muted">Loading…</p></div>
+  </section>
+
+  <section class="panel" id="doc-search-panel">
+    <div class="panel-head"><h2>Find relevant passages</h2></div>
+    <form id="doc-search-form" class="inline-ask">
+      <input id="doc-search-input" type="text" maxlength="1000" placeholder="Search your project documents" aria-label="Search passages">
+      <button class="button button-secondary" type="submit">Search</button>
+    </form>
+    <p id="doc-search-error" class="form-error" role="alert" hidden></p>
+    <div id="doc-search-results" aria-live="polite"></div>
+  </section>
+
+  <section class="panel" id="doc-ask-panel">
+    <div class="panel-head"><h2>Ask a question</h2></div>
+    <form id="doc-ask-form" class="inline-ask">
+      <input id="doc-question" type="text" maxlength="1000" placeholder="Ask about your project documents" aria-label="Question" required>
+      <button id="doc-ask-button" class="button button-primary" type="submit">Ask</button>
+    </form>
+    <p id="doc-ask-loading" class="muted" role="status" hidden>Searching your documents…</p>
+    <p id="doc-ask-error" class="form-error" role="alert" hidden></p>
+    <div id="doc-answer" aria-live="polite"></div>
+  </section>
+</div>
+{% endblock %}
+{% block page_scripts %}<script defer src="{{ url_for('static', filename='js/documents.js', v='20261115c') }}"></script>{% endblock %}

@@ -15,7 +15,10 @@
           "Content-Type": "application/json",
           "X-CSRFToken": document.querySelector('meta[name="csrf-token"]')?.content || "",
         },
-        body: JSON.stringify({ name: form.elements.namedItem("name").value }),
+        body: JSON.stringify({
+          name: form.elements.namedItem("name").value,
+          location: form.elements.namedItem("location")?.value || "",
+        }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error?.message || "Could not create project.");

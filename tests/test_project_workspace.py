@@ -161,14 +161,14 @@ class ProjectWorkspaceTests(unittest.TestCase):
         response = self.client.get("/dashboard/")
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Total Projects", response.data)
-        self.assertIn(b"Workspace", response.data)
+        self.assertIn(b"Open Project", response.data)
         details = self.client.get(f"/api/projects/{self.project_id}").json
         self.assertEqual(details["documents"][0]["id"], document_id)
         self.assertEqual(details["records"], [])
         self.assertEqual(details["expenses"], [])
         workspace = f"/dashboard/projects/{self.project_id}/"
         self.assertEqual(self.client.get(workspace).status_code, 200)
-        self.assertIn(b'id="report-upload-form"', self.client.get(workspace).data)
+        self.assertIn(b'id="report-upload-form"', self.client.get(workspace + "reports/").data)
         with self.app.app_context():
             before = db.session.query(DocumentPrediction).count()
         self.client.get(workspace)

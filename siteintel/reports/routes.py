@@ -198,7 +198,7 @@ def get_report(report_id: str):
 
 def _project_document(document_id, permission="viewer"):
     document = db.session.get(Document, document_id)
-    if document is None or get_accessible_project(
+    if document is None or document.category is not None or get_accessible_project(
         int(current_user.get_id()), document.project_id, permission
     ) is None:
         return None

@@ -1,0 +1,33 @@
+{% extends "project/base.html" %}
+{% block section %}
+<section class="panel">
+  <div class="panel-head"><h2>Project details</h2></div>
+  <form id="project-settings-form" class="stack settings-form" novalidate>
+    <label>Project name
+      <input name="name" required maxlength="160" value="{{ project.name }}" {{ "disabled" if not can_manage }}>
+    </label>
+    <label>Location
+      <input name="location" maxlength="200" value="{{ project.location or '' }}" {{ "disabled" if not can_manage }}>
+    </label>
+    <label>Status
+      <select name="status" {{ "disabled" if not can_manage }}>
+        {% for value, label in status_labels.items() %}<option value="{{ value }}" {{ "selected" if value == project.status }}>{{ label }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Description
+      <textarea name="description" rows="4" maxlength="2000" {{ "disabled" if not can_manage }}>{{ project.description or "" }}</textarea>
+    </label>
+    <p id="settings-message" class="form-note" role="status" hidden></p>
+    {% if can_manage %}
+    <div><button class="button button-primary" type="submit">Save changes</button></div>
+    {% else %}
+    <p class="muted">Only the project owner can edit these details.</p>
+    {% endif %}
+  </form>
+</section>
+<section class="panel">
+  <div class="panel-head"><h2>Project configuration</h2></div>
+  <p class="muted">Created {{ project.created_at.strftime("%b %d, %Y") }}. Module-specific settings will appear here as new modules are enabled.</p>
+</section>
+{% endblock %}
+{% block page_scripts %}{% if can_manage %}<script defer src="{{ url_for('static', filename='js/project_settings.js', v='20261114-shell') }}"></script>{% endif %}{% endblock %}
