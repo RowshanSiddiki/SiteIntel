@@ -64,6 +64,11 @@
       </div>
     </article>
     {% endfor %}
+    <button class="project-create-tile" type="button" data-open-dialog="create-project-dialog">
+      <span class="project-create-icon">{{ icon("plus", 22) }}</span>
+      <strong>New project</strong>
+      <small>Create a workspace for your next site.</small>
+    </button>
   </div>
   {% elif filtered %}
   <div class="empty-state">{{ icon("search", 32) }}<h3>No matching projects</h3><p>Try a different name or status filter.</p><a class="button button-secondary" href="{{ url_for('dashboard.index') }}">Clear filters</a></div>
@@ -71,12 +76,6 @@
   <div class="empty-state">{{ icon("folder", 32) }}<h3>No projects yet</h3><p>Create your first project to start uploading reports and getting predictions.</p>
     <button class="button button-primary" type="button" data-open-dialog="create-project-dialog">{{ icon("plus", 18) }}Create New Project</button></div>
   {% endif %}
-</section>
-
-<section class="banner">
-  <span class="stat-icon">{{ icon("lightbulb") }}</span>
-  <div><h2>Get Started</h2><p>Create a project, upload a site report, and SiteIntel will extract the details and generate predictions for you.</p></div>
-  <button class="button button-light" type="button" data-open-dialog="create-project-dialog">Create Project</button>
 </section>
 
 <dialog class="modal" id="create-project-dialog" aria-labelledby="create-project-title">

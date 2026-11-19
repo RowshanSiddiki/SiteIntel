@@ -111,6 +111,17 @@ class DashboardWorkspaceTests(unittest.TestCase):
         self.assertEqual(html.count("% complete"), 1)
         self.assertIn("42% complete", html)
 
+    def test_control_room_theme_and_project_create_tile_render(self):
+        response = self.client.get("/dashboard/")
+        html = response.get_data(as_text=True)
+        self.assertIn("control-room.css", html)
+        self.assertIn('class="architecture-backdrop"', html)
+        self.assertIn('class="architecture-build"', html)
+        self.assertIn('class="build-crane"', html)
+        self.assertIn('class="project-create-tile"', html)
+        self.assertIn('title="Dashboard" aria-label="Dashboard"', html)
+        self.assertIn('data-open-dialog="create-project-dialog"', html)
+
     def test_every_section_loads_for_owner_and_is_hidden_from_strangers(self):
         project_id = self.ids_by_name["Alpha Tower"]
         base = f"/dashboard/projects/{project_id}/"

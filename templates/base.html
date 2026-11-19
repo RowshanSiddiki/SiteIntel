@@ -6,15 +6,36 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#14284b">
+    <meta name="theme-color" content="#080b12">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}SiteIntel{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/siteintel.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css', v='20261115-docs') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/control-room.css', v='20261119-10') }}">
     <script defer src="{{ url_for('static', filename='js/auth.js') }}"></script>
     {% if signed_in %}<script defer src="{{ url_for('static', filename='js/shell.js', v='20261114-shell') }}"></script>{% endif %}
   </head>
   <body class="{{ 'app-body' if signed_in else 'public-body' }}">
+    <div class="architecture-backdrop" aria-hidden="true">
+      <svg viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMax slice" role="presentation">
+        <g class="architecture-static">
+          <path d="M0 920H1600M50 920V640H330V920M330 920V470H690V920M690 920V720H960V920M960 920V350H1270V920M1270 920V560H1530V920" />
+          <path d="M85 690H295M85 740H295M85 790H295M85 840H295M365 520H655M365 570H655M365 620H655M365 670H655M365 720H655M365 770H655M365 820H655M365 870H655" />
+          <path d="M995 400H1235M995 450H1235M995 500H1235M995 550H1235M995 600H1235M995 650H1235M995 700H1235M995 750H1235M995 800H1235M995 850H1235M1305 610H1495M1305 660H1495M1305 710H1495M1305 760H1495M1305 810H1495M1305 860H1495" />
+          <path d="M390 520V895M435 520V895M480 520V895M525 520V895M570 520V895M615 520V895M1025 400V895M1070 400V895M1115 400V895M1160 400V895M1205 400V895M1335 610V895M1380 610V895M1425 610V895M1470 610V895" />
+          <path d="M1110 350V170M1080 170H1390M1110 170L1000 260M1390 170L1460 225M1095 170L1125 170M1100 185L1120 185M1100 200L1120 200M1100 215L1120 215M1100 230L1120 230" />
+        </g>
+        <g class="architecture-build">
+          <path class="build-left" pathLength="1" d="M50 920V640H330V920" />
+          <path class="build-mid" pathLength="1" d="M330 920V470H690V920" />
+          <path class="build-mid-floors" pathLength="1" d="M365 870H655M365 820H655M365 770H655M365 720H655M365 670H655M365 620H655M365 570H655M365 520H655" />
+          <path class="build-high" pathLength="1" d="M960 920V350H1270V920" />
+          <path class="build-high-floors" pathLength="1" d="M995 850H1235M995 800H1235M995 750H1235M995 700H1235M995 650H1235M995 600H1235M995 550H1235M995 500H1235M995 450H1235M995 400H1235" />
+          <path class="build-crane" pathLength="1" d="M1110 920V170H1390M1110 170L1000 260" />
+          <path class="build-right" pathLength="1" d="M1270 920V560H1530V920" />
+        </g>
+      </svg>
+    </div>
     {% if signed_in %}
     {% set pending_total, pending_documents = pending_reviews() %}
     {% set name_parts = current_user.full_name.split() %}
@@ -26,9 +47,9 @@
         </a>
         {% block sidebar_nav %}
         <nav class="app-nav">
-          <a href="{{ url_for('dashboard.index') }}" {% if request.endpoint == 'dashboard.index' %}class="active" aria-current="page"{% endif %}>{{ icon("home") }}<span>Dashboard</span></a>
-          <a href="{{ url_for('dashboard.account_settings') }}" {% if request.endpoint == 'dashboard.account_settings' %}class="active" aria-current="page"{% endif %}>{{ icon("settings") }}<span>Settings</span></a>
-          <a href="{{ url_for('dashboard.help_page') }}" {% if request.endpoint == 'dashboard.help_page' %}class="active" aria-current="page"{% endif %}>{{ icon("help") }}<span>Help</span></a>
+          <a href="{{ url_for('dashboard.index') }}" title="Dashboard" aria-label="Dashboard" {% if request.endpoint == 'dashboard.index' %}class="active" aria-current="page"{% endif %}>{{ icon("home") }}<span>Dashboard</span></a>
+          <a href="{{ url_for('dashboard.account_settings') }}" title="Settings" aria-label="Settings" {% if request.endpoint == 'dashboard.account_settings' %}class="active" aria-current="page"{% endif %}>{{ icon("settings") }}<span>Settings</span></a>
+          <a href="{{ url_for('dashboard.help_page') }}" title="Help" aria-label="Help" {% if request.endpoint == 'dashboard.help_page' %}class="active" aria-current="page"{% endif %}>{{ icon("help") }}<span>Help</span></a>
         </nav>
         {% endblock %}
         <p class="app-tagline">Smarter Construction.<br>Brighter Future.</p>
