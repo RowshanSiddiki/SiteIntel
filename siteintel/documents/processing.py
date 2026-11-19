@@ -61,13 +61,13 @@ def process_document(document_id: int, *, force: bool = False) -> str:
         cleaned = [clean_text(page.text) for page in extraction.pages]
         from siteintel.reports.models import DailyConstructionReport
 
-        is_daily_report = db.session.scalar(
-            db.select(DailyConstructionReport.id).where(
+        daily_report = db.session.scalar(
+            db.select(DailyConstructionReport).where(
                 DailyConstructionReport.document_id == document_id,
                 DailyConstructionReport.project_id == document.project_id,
             )
-        ) is not None
-        if not is_daily_report:
+        )
+        if daily_report is None:
             cleaned = strip_repeated_lines(cleaned)
         rows = []
         for page, text in zip(extraction.pages, cleaned):
@@ -87,6 +87,11 @@ def process_document(document_id: int, *, force: bool = False) -> str:
                 embedding_model=EMBEDDING_MODEL,
             )
             for index, (number, text, vector, length) in enumerate(rows)
+        )
+        from siteintel.expenses.extraction import sync_observations
+        sync_observations(
+            document, extraction.pages,
+            reporting_date=daily_report.reporting_date if daily_report else None,
         )
         db.session.execute(
             db.update(Document).where(Document.id == document_id).values(

@@ -1,31 +1,125 @@
 {% extends "project/base.html" %}
-{% from "_icons.html" import icon %}
 {% block section %}
-{# Phase 3 integration point: mount expense entry, bills and cost analysis on #expenses-module. #}
-<div id="expenses-module" data-phase="3">
+<div id="expenses-module" data-insights-url="{{ url_for('expenses.insights', project_id=project.id) }}">
+  <script type="application/json" id="finance-chart-data">{{ finance_chart_data|tojson }}</script>
   <section class="panel">
-    <div class="panel-head"><h2>Financial overview</h2><span class="badge">Coming soon</span></div>
-    <p class="muted">Cost analysis and quotation-versus-actual comparisons will appear here once the finance module is available.</p>
-    <div class="feature-grid">
-      {% for label, glyph in [("Expense recording", "wallet"), ("Contractor bills", "file-text"), ("Material purchases", "folder"), ("Quotation vs actual", "chart"), ("Cost analysis", "activity"), ("Financial dashboard", "dashboard")] %}
-      <div class="feature-tile is-disabled">{{ icon(glyph) }}<div><h3>{{ label }}</h3></div></div>
-      {% endfor %}
+    <div class="panel-head"><div><h2>Financial analytics</h2><p class="muted">Based on verified figures extracted from this project's documents.</p></div>
+      <a class="button button-secondary" href="{{ url_for('dashboard.project_section', project_id=project.id, section='document-assistant') }}">Open Document Assistant</a>
     </div>
+    <p class="muted">Actual expenses include verified invoices and direct costs, not quotation totals, scheduled payments or payments already included in invoices. Unknown categories remain unclassified. Existing manual expenses are excluded.</p>
+    <form class="expense-filters" method="get">
+      <label>Project<select id="finance-project">{% for item in finance_projects %}<option value="{{ url_for('dashboard.project_section', project_id=item.id, section='expenses') }}" {{ 'selected' if item.id == project.id }}>{{ item.name }}</option>{% endfor %}</select></label>
+      <label>From<input type="date" name="start" value="{{ finance_filters.start }}"></label>
+      <label>To<input type="date" name="end" value="{{ finance_filters.end }}"></label>
+      <label>Category<select name="category"><option value="">All categories</option>{% for category in finance_categories %}<option {{ 'selected' if finance_filters.category == category }}>{{ category }}</option>{% endfor %}</select></label>
+      <div class="expense-actions"><button class="button button-secondary">Apply filters</button><a href="{{ url_for('dashboard.project_section', project_id=project.id, section='expenses') }}">Clear</a></div>
+    </form>
+    <p class="muted">Date filters exclude documents without an identifiable date. Currencies are not combined.</p>
+  </section>
+
+  {% if finance_pending %}
+  <section class="panel">
+    <div class="panel-head"><h2>Figures awaiting verification</h2><span class="badge">{{ finance_pending|length }} to review</span></div>
+    <p class="muted">Check each figure against its source. Confirm an expense only if it represents an actual cost, not an estimate or duplicate. Unverified figures are excluded from totals.</p>
+    <div class="table-wrap"><table class="data-table"><thead><tr><th>Source and extracted text</th><th>Type</th><th>Figure</th><th>Review</th></tr></thead>
+      <tbody>{% for row in finance_pending %}
+        <tr><td><a target="_blank" rel="noopener" href="{{ url_for('documents.view_file', project_id=project.id, document_id=row.document_id) }}#page={{ row.page_number }}">{{ row.document.file_name }} · page {{ row.page_number }}</a><small class="finance-source">{{ row.source_text }}</small></td>
+          <td>{{ row.kind|capitalize }} · {{ row.category }}</td><td>{{ row.currency }} {{ "%.2f"|format(row.amount) }}</td>
+          <td><div class="expense-actions"><form method="post" action="{{ url_for('expenses.review', project_id=project.id, observation_id=row.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button name="decision" value="confirmed" class="button button-secondary button-small">Confirm</button><button name="decision" value="ignored" class="button button-secondary button-small">Ignore</button></form></div></td>
+        </tr>{% endfor %}</tbody></table></div>
+  </section>
+  {% endif %}
+  {% if finance_ignored %}
+  <section class="panel">
+    <details><summary>Ignored figures ({{ finance_ignored|length }})</summary>
+      {% for row in finance_ignored %}<div class="expense-draft"><span>{{ row.document.file_name }} · {{ row.source_text }}</span>
+        <form method="post" action="{{ url_for('expenses.review', project_id=project.id, observation_id=row.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button name="decision" value="pending" class="button button-secondary button-small">Review again</button></form>
+      </div>{% endfor %}
+    </details>
+  </section>
+  {% endif %}
+
+  <section class="panel">
+    <div class="panel-head"><h2>Project expenses</h2><span class="muted">Verified document figures only</span></div>
+    {% for currency, total in finance_totals|dictsort %}
+    <div class="expense-totals"><div><span>Total recorded expenses</span><strong>{{ currency }} {{ "%.2f"|format(total) }}</strong></div>
+      <div><span>Outstanding bills reported</span><strong>{% if currency in finance_outstanding %}{{ currency }} {{ "%.2f"|format(finance_outstanding[currency]) }}{% else %}Not available{% endif %}</strong></div>
+    </div>
+    {% else %}<p class="muted">No verified expense figures available. Quotations and scheduled payments are not actual expenses.</p>{% endfor %}
+    {% if finance_quotations %}<p>Verified quotation totals (not actual expenses): {% for currency, amount in finance_quotations|dictsort %}{{ currency }} {{ "%.2f"|format(amount) }} {% endfor %}</p>{% endif %}
+    {% if finance_payments %}<p>Verified actual payments (not added again to invoices): {% for currency, amount in finance_payments|dictsort %}{{ currency }} {{ "%.2f"|format(amount) }} {% endfor %}</p>{% endif %}
+    <div id="chart-distribution" class="finance-svg-chart" aria-label="Expense distribution donut chart"></div>
+    {% if finance_breakdown %}
+    <h3>Expense distribution</h3>
+    <div class="finance-chart" aria-label="Expense distribution by category">{% for (currency, category), amount in finance_breakdown|dictsort %}
+      <div><div class="finance-chart-label"><a href="{{ url_for('dashboard.project_section', project_id=project.id, section='expenses', category=category, start=finance_filters.start, end=finance_filters.end) }}">{{ category }}</a><strong>{{ currency }} {{ "%.2f"|format(amount) }}</strong></div><progress aria-label="{{ category }}: {{ currency }} {{ '%.2f'|format(amount) }}" title="{{ category }}: {{ currency }} {{ '%.2f'|format(amount) }}" max="{{ finance_totals[currency] }}" value="{{ amount }}">{{ amount }}</progress></div>
+    {% endfor %}</div>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Material, labour and equipment costs</h2></div>
+    <div id="chart-costs" class="finance-svg-chart" aria-label="Category cost comparison chart"></div>
+    <p class="muted">Verified category costs recorded in documents; these may not cover every expense.</p>
+    {% if finance_costs %}<div class="expense-totals">{% for currency, category, amount in finance_costs %}<div><span>{{ category }}</span><strong>{{ currency }} {{ "%.2f"|format(amount) }}</strong></div>{% endfor %}</div>
+    {% else %}<p class="muted">No verified category costs available.</p>{% endif %}
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Spending trends</h2><div class="expense-actions"><button type="button" class="button button-secondary button-small" data-trend="daily" aria-pressed="true">Daily</button><button type="button" class="button button-secondary button-small" data-trend="monthly" aria-pressed="false">Monthly</button></div></div>
+    <div id="chart-trend" class="finance-svg-chart" aria-label="Expense trend line chart"></div>
+    <div id="finance-daily" class="finance-chart">{% for currency, day, amount in finance_trends %}<div><div class="finance-chart-label"><span>{{ day }}</span><strong>{{ currency }} {{ "%.2f"|format(amount) }}</strong></div><progress max="{{ finance_trend_max[currency] }}" value="{{ amount }}">{{ amount }}</progress></div>{% else %}<p class="muted">No dated expense figures available.</p>{% endfor %}</div>
+    <div id="finance-monthly" class="finance-chart" hidden>{% for (currency, month), amount in finance_monthly|dictsort %}<div><div class="finance-chart-label"><span>{{ month }}</span><strong>{{ currency }} {{ "%.2f"|format(amount) }}</strong></div><progress max="{{ finance_monthly_max[currency] }}" value="{{ amount }}">{{ amount }}</progress></div>{% else %}<p class="muted">No dated expense figures available.</p>{% endfor %}</div>
   </section>
   <section class="panel">
-    <div class="panel-head"><h2>Recorded expenses</h2></div>
-    {% if expenses %}
-    <div class="table-wrap"><table class="data-table">
-      <thead><tr><th>Date</th><th>Description</th><th class="num">Amount</th></tr></thead>
-      <tbody>
-      {% for expense in expenses %}
-        <tr><td>{{ expense.expense_date }}</td><td>{{ expense.description }}<small class="muted"> · {{ expense.category }}</small></td><td class="num">{{ expense.amount }} {{ expense.currency }}</td></tr>
-      {% endfor %}
-      </tbody>
-    </table></div>
-    {% else %}
-    <div class="empty-state compact">{{ icon("wallet", 28) }}<h3>No expenses recorded</h3><p>Expenses recorded for this project will be listed here.</p></div>
-    {% endif %}
+    <div class="panel-head"><h2>Material and component costs</h2></div>
+    <p class="muted">Document line items are shown separately and are not added to invoice totals.</p>
+    {% if finance_quoted_materials %}
+    <h3>Quoted material comparison — not actual spending</h3>
+    <div id="chart-quoted-materials" class="finance-svg-chart" aria-label="Quoted material cost comparison"></div>
+    <div class="table-wrap"><table class="data-table"><thead><tr><th>Material</th><th>Quoted cost</th></tr></thead><tbody>
+      {% for currency, label, amount in finance_quoted_materials %}<tr><td>{{ label }}</td><td>{{ currency }} {{ "%.2f"|format(amount) }}</td></tr>{% endfor %}
+    </tbody></table></div>{% endif %}
+    <div id="chart-materials" class="finance-svg-chart" aria-label="Material spending comparison chart"></div>
+    {% if finance_materials %}<div class="finance-chart" aria-label="Material cost comparison">
+      {% for currency, label, amount in finance_materials %}<div><div class="finance-chart-label"><span>{{ label }}</span><strong>{{ currency }} {{ "%.2f"|format(amount) }}</strong></div><progress max="{{ finance_material_max[currency] }}" value="{{ amount }}">{{ amount }}</progress></div>{% endfor %}
+    </div>{% endif %}
+    {% if finance_components %}<div class="table-wrap"><table class="data-table"><thead><tr><th>Item</th><th>Category</th><th>Cost</th><th>Source</th></tr></thead><tbody>
+      {% for row in finance_components %}<tr><td>{{ row.label }}</td><td>{{ row.category }}</td><td>{{ row.currency }} {{ "%.2f"|format(row.amount) }}</td><td><a href="{{ url_for('documents.view_file', project_id=project.id, document_id=row.document_id) }}#page={{ row.page_number }}">View document</a></td></tr>{% endfor %}
+    </tbody></table></div>{% else %}<p class="muted">No verified component costs available.</p>{% endif %}
+  </section>
+  <section class="panel">
+    <div class="panel-head"><h2>Budget vs. actual</h2></div>
+    {% if finance_budgets %}<p class="muted">Lime: budget · Blue: recorded actual. No conversion or extrapolation is applied.</p>{% endif %}
+    <div id="chart-budget" class="finance-svg-chart" aria-label="Budget versus actual chart"></div>
+    {% if finance_budgets %}{% for budget in finance_budgets %}
+      <p>Budget: {{ budget.currency }} {{ "%.2f"|format(budget.amount) }} · <a href="{{ url_for('documents.view_file', project_id=project.id, document_id=budget.document_id) }}#page={{ budget.page_number }}">Source</a>
+      {% if budget.currency in finance_totals %} · Recorded actual: {{ budget.currency }} {{ "%.2f"|format(finance_totals[budget.currency]) }}{% else %} · Actual not available{% endif %}</p>
+    {% endfor %}<p class="muted">Budgets are shown individually, not added together.</p>{% else %}<p class="muted">No verified budget data available.</p>{% endif %}
+  </section>
+  <section class="panel">
+    <div class="panel-head"><h2>Invoice and payment status</h2></div>
+    <p class="muted">Outstanding is shown only when explicitly stated; scheduled payments are not proof of payment.</p>
+    {% if finance_invoice_totals or finance_payments or finance_outstanding or finance_schedules %}
+      {% for currency, amount in finance_invoice_totals|dictsort %}<p>Verified invoice totals: {{ currency }} {{ "%.2f"|format(amount) }}</p>{% endfor %}
+      {% for currency, amount in finance_payments|dictsort %}<p>Recorded payments: {{ currency }} {{ "%.2f"|format(amount) }}</p>{% endfor %}
+      {% for currency, amount in finance_outstanding|dictsort %}<p>Explicit outstanding balance: {{ currency }} {{ "%.2f"|format(amount) }}</p>{% endfor %}
+      {% for (currency, kind), amount in finance_schedules|dictsort %}<p>{{ 'Scheduled advance' if kind == 'advance_schedule' else 'Scheduled balance' }} (not recorded payment): {{ currency }} {{ "%.2f"|format(amount) }}</p>{% endfor %}
+      {% if not finance_payments %}<p>Recorded payments: not available</p>{% endif %}
+      {% if not finance_outstanding %}<p>Outstanding balance: not available</p>{% endif %}
+    {% else %}<p class="muted">No verified invoice or payment status data available.</p>{% endif %}
+  </section>
+  <section class="panel">
+    <div class="panel-head"><h2>AI financial insights</h2><button id="finance-insights-button" type="button" class="button button-secondary">Generate insights</button></div>
+    <p class="muted">Requires a configured local language model. Verify any generated insight against the source documents.</p>
+    <p id="finance-insights-result" role="status"></p>
+  </section>
+  <section class="panel">
+    <div class="panel-head"><h2>Verified source figures</h2></div>
+    {% if finance_records %}<div class="table-wrap"><table class="data-table"><thead><tr><th>Date</th><th>Figure</th><th>Category</th><th>Amount</th><th>Source</th>{% if can_edit %}<th>Review</th>{% endif %}</tr></thead><tbody>
+      {% for row in finance_records %}<tr><td>{{ row.observed_date or "Not specified" }}</td><td>{{ row.label }} <small class="muted">({{ row.kind }})</small></td><td>{{ row.category }}</td><td>{{ row.currency }} {{ "%.2f"|format(row.amount) }}</td><td><a href="{{ url_for('documents.view_file', project_id=project.id, document_id=row.document_id) }}#page={{ row.page_number }}">{{ row.document.file_name }} · page {{ row.page_number }}</a></td>{% if can_edit %}<td><form method="post" action="{{ url_for('expenses.review', project_id=project.id, observation_id=row.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button name="decision" value="pending" class="button button-secondary button-small">Revoke</button></form></td>{% endif %}</tr>{% endfor %}
+    </tbody></table></div>{% else %}<p class="muted">No verified figures match these filters.</p>{% endif %}
   </section>
 </div>
 {% endblock %}
+{% block page_scripts %}<link rel="stylesheet" href="{{ url_for('static', filename='css/expenses.css') }}"><script defer src="{{ url_for('static', filename='js/expenses.js') }}"></script>{% endblock %}

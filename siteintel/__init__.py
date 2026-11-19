@@ -51,10 +51,12 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
     from siteintel.auth import auth_bp
     from siteintel.dashboard import dashboard_bp
     from siteintel.documents import documents_bp
+    from siteintel.expenses import expenses_bp
     from siteintel.ml.routes import ml_bp
     from siteintel.ml import models as ml_models
     from siteintel.projects import project_models
     from siteintel.reports import reports_bp
+    from siteintel.reports import routes as report_routes
     from siteintel.reports import models as report_models
 
     app.register_blueprint(auth_bp)
@@ -62,6 +64,7 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
     app.register_blueprint(ml_bp)
     app.register_blueprint(reports_bp)
     app.register_blueprint(documents_bp)
+    app.register_blueprint(expenses_bp)
 
     @app.get("/")
     def index():
@@ -158,6 +161,43 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
                 "MySQL connection failed. Check MYSQL_* settings and server status."
             ) from error
         click.echo("MySQL connection successful.")
+
+    @app.cli.command("finance-backfill")
+    def finance_backfill_command() -> None:
+        """Extract reviewable financial figures from already indexed documents."""
+        from siteintel.documents.extraction import ExtractionError, extract_pdf_pages
+        from siteintel.documents.storage import resolve_path
+        from siteintel.expenses.extraction import sync_observations
+        from siteintel.projects.models import Document
+        from siteintel.reports.models import DailyConstructionReport
+
+        rows = db.session.execute(
+            db.select(Document, DailyConstructionReport.reporting_date)
+            .outerjoin(DailyConstructionReport, (
+                (DailyConstructionReport.document_id == Document.id)
+                & (DailyConstructionReport.project_id == Document.project_id)
+            ))
+            .where(Document.category.is_not(None), Document.processing_status == "completed")
+            .order_by(Document.id)
+        ).all()
+        failures = []
+        for document, reporting_date in rows:
+            path = resolve_path(document.storage_key, document.project_id)
+            try:
+                if path is None:
+                    raise ExtractionError("The stored file could not be found.")
+                pages = extract_pdf_pages(path).pages
+                sync_observations(document, pages, reporting_date=reporting_date)
+                db.session.commit()
+            except (ExtractionError, OSError, SQLAlchemyError):
+                db.session.rollback()
+                app.logger.exception("Could not extract finance data from document %s", document.id)
+                failures.append(document.id)
+        if failures:
+            raise click.ClickException(
+                f"Financial extraction failed for {len(failures)} document(s); check server logs."
+            )
+        click.echo(f"Financial extraction completed for {len(rows)} indexed document(s).")
 
     return app
 

@@ -17,7 +17,6 @@ from siteintel.dashboard.services import (
 from siteintel.extensions import db
 from siteintel.projects import (
     PROJECT_STATUS_LABELS,
-    Expense,
     get_accessible_project,
     get_owned_project,
 )
@@ -148,10 +147,8 @@ def project_section(project_id, section):
     project = _project_or_404(project_id)
     context = _workspace_context(project, section)
     if section == "expenses":
-        context["expenses"] = db.session.scalars(
-            db.select(Expense).where(Expense.project_id == project.id)
-            .order_by(Expense.expense_date.desc(), Expense.id.desc()).limit(10)
-        ).all()
+        from siteintel.expenses.routes import overview
+        context.update(overview(project))
     if section == "settings":
         context["can_manage"] = get_owned_project(current_user.id, project.id) is not None
     return render_template(WORKSPACE_SECTIONS[section][2], **context)

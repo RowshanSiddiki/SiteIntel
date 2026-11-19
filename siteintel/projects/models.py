@@ -327,6 +327,9 @@ class Expense(TimestampMixin, db.Model):
     reference = db.Column(String(100))
     amount = db.Column(Numeric(14, 2), nullable=False)
     currency = db.Column(String(3), nullable=False)
+    paid_amount = db.Column(Numeric(14, 2), nullable=False, default=0, server_default="0")
+    notes = db.Column(Text)
+    items = db.Column(db.JSON)
     status = db.Column(
         String(16),
         nullable=False,
@@ -336,6 +339,62 @@ class Expense(TimestampMixin, db.Model):
 
     project = db.relationship("Project", back_populates="expenses")
     created_by = db.relationship("User", back_populates="expenses_created")
+    bill = db.relationship("ExpenseBill", back_populates="expense", uselist=False)
+
+    @property
+    def payment_status(self):
+        if self.paid_amount <= 0:
+            return "unpaid"
+        if self.paid_amount >= self.amount:
+            return "paid"
+        return "partial"
+
+
+class ExpenseBill(TimestampMixin, db.Model):
+    __tablename__ = "expense_bills"
+    __table_args__ = (
+        db.UniqueConstraint("project_id", "sha256", name="uq_expense_bill_project_hash"),
+        db.UniqueConstraint("expense_id", name="uq_expense_bill_expense"),
+        Index("ix_expense_bills_project_id", "project_id"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, ForeignKey("projects.id", ondelete="RESTRICT"), nullable=False)
+    uploaded_by_id = db.Column(db.Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    expense_id = db.Column(db.Integer, ForeignKey("expenses.id", ondelete="RESTRICT"))
+    file_name = db.Column(String(255), nullable=False)
+    storage_id = db.Column(String(32), nullable=False)
+    stored_name = db.Column(String(40), nullable=False)
+    sha256 = db.Column(String(64), nullable=False)
+    extracted_text = db.Column(Text)
+    extracted_fields = db.Column(db.JSON)
+
+    expense = db.relationship("Expense", back_populates="bill")
+
+
+class FinancialObservation(TimestampMixin, db.Model):
+    __tablename__ = "financial_observations"
+    __table_args__ = (
+        db.UniqueConstraint("document_id", "fingerprint", name="uq_financial_observation_source"),
+        Index("ix_financial_observations_project_id", "project_id"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, ForeignKey("projects.id", ondelete="RESTRICT"), nullable=False)
+    document_id = db.Column(db.Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+    fingerprint = db.Column(String(64), nullable=False)
+    kind = db.Column(String(20), nullable=False)
+    category = db.Column(String(64), nullable=False)
+    label = db.Column(String(300), nullable=False)
+    amount = db.Column(Numeric(14, 2), nullable=False)
+    currency = db.Column(String(3), nullable=False)
+    observed_date = db.Column(Date)
+    page_number = db.Column(db.Integer, nullable=False)
+    source_text = db.Column(Text, nullable=False)
+    document_reference = db.Column(String(128))
+    status = db.Column(String(16), nullable=False, default="pending", server_default="pending")
+    reviewed_by_id = db.Column(db.Integer, ForeignKey("users.id", ondelete="RESTRICT"))
+    document = db.relationship("Document")
 
 
 class QuotationItem(TimestampMixin, db.Model):

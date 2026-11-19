@@ -1,7 +1,9 @@
 """Minimal OpenAI-compatible chat client built on the standard library."""
 import json
+import ipaddress
 import logging
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from siteintel.documents.settings import LLMSettings
@@ -13,7 +15,19 @@ class LLMError(RuntimeError):
     """The language model could not produce a usable response."""
 
 
-def generate(settings: LLMSettings, system: str, user: str) -> str:
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def generate(settings: LLMSettings, system: str, user: str, *, local_only: bool = False) -> str:
+    if local_only:
+        host = urllib.parse.urlparse(settings.base_url).hostname
+        try:
+            if not host or not ipaddress.ip_address(host).is_loopback:
+                raise LLMError("The language model must use a numeric loopback address.")
+        except ValueError as error:
+            raise LLMError("The language model must use a numeric loopback address.") from error
     payload = json.dumps({
         "model": settings.model,
         "temperature": 0,
@@ -36,7 +50,12 @@ def generate(settings: LLMSettings, system: str, user: str) -> str:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=settings.timeout) as response:  # noqa: S310 - scheme validated in settings
+        if local_only:
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
+            response_context = opener.open(request, timeout=settings.timeout)
+        else:
+            response_context = urllib.request.urlopen(request, timeout=settings.timeout)  # noqa: S310 - scheme validated in settings
+        with response_context as response:
             body = json.loads(response.read().decode("utf-8"))
         content = body["choices"][0]["message"]["content"]
     except urllib.error.HTTPError as error:

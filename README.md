@@ -251,8 +251,51 @@ status. Apply it with `flask --app siteintel:create_app db upgrade` (back up
 the database first).
 
 Later-phase integration points are the placeholder pages' containers:
-`#expenses-module`, `#ai-agent-module` and `#communication-module` in
+`#ai-agent-module` and `#communication-module` in
 `templates/project/`.
+
+## Expenses & Bills (Phase 3)
+
+The project workspace displays analytics derived from indexed project PDFs
+and generated Daily Construction Reports. The existing document pipeline
+extracts identifiable monetary figures into source-linked observations.
+Editors must verify or ignore each figure without entering financial data;
+review decisions can be revoked or revisited, and only confirmed figures
+appear in calculations. Existing manual expenses are
+preserved but excluded. Viewers cannot review figures.
+
+The extractor is deliberately conservative: it requires explicit BDT, USD,
+EUR, GBP or INR currency codes (or unambiguous ৳, ₹, € or £ symbols) and
+recognizable cost, total, payment, budget or outstanding labels. Missing dates
+and amounts are not guessed. Dates are taken from unambiguous ISO or
+day-month-name document dates or the generated report date. OCR and
+document formats vary, and extracted figures may be incomplete or incorrect.
+Reviewers should check each source and ignore estimates or duplicate bills.
+Quotation totals and payment schedules are not expenses. Verified invoice
+totals and direct expenses count once; actual payments, delivery charges and
+line items are displayed separately rather than added to invoice totals.
+Unknown categories remain unclassified. Material components from quotations
+are labeled as quoted, not actual spending.
+Repeated processing of an unchanged document preserves review decisions;
+changed figures require a new review. Repeated totals and delivery charges in
+one document are deduplicated. Cross-document deduplication requires an
+explicit matching document type, number and vendor; other possible duplicates
+still require human review. Amounts in different currencies are never added
+together.
+
+The dashboard offers date, category and project filters, category and trend
+charts, source links, and individual budgets when available. Figures without
+dates do not appear in date-filtered views. AI insights require the existing
+LLM settings to point to a numeric local loopback address (such as
+`127.0.0.1`); proxies and redirects are disabled for these calls. No project
+data is sent to a remote language model by this feature. Generated insights require review.
+Use Document Assistant for PDFs and Report Builder for image-based source
+reports; generated reports are indexed by the same RAG pipeline.
+
+Back up the database and run `flask --app siteintel:create_app db upgrade`.
+Then run `flask --app siteintel:create_app finance-backfill` once to extract
+reviewable figures from previously indexed documents. Newly processed or
+reprocessed documents are handled automatically.
 
 ## Document Assistant (Phase 2)
 

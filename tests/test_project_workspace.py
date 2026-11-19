@@ -319,6 +319,22 @@ class ProjectWorkspaceTests(unittest.TestCase):
                 self.assertEqual(result.chunks[0].reporting_date, reporting_date)
                 self.assertEqual(result.chunks[0].page_number, 1)
 
+            for question in (
+                "What happened in the daily construction report?",
+                "What happened on 2026-11-19?",
+                "Summarize the report for 19 November 2026",
+            ):
+                result = search_project_documents(self.project_id, question)
+                self.assertTrue(result.sufficient, question)
+                self.assertEqual(result.chunks[0].document_id, generated_id)
+                self.assertEqual(result.chunks[0].reporting_date, reporting_date)
+            self.assertFalse(search_project_documents(
+                self.project_id, "What happened on 2026-11-18?"
+            ).sufficient)
+            self.assertFalse(search_project_documents(
+                self.project_id, "What is the cement price on 2026-11-19?"
+            ).sufficient)
+
             other = Project(owner_id=self.ids["stranger"], name="Other")
             db.session.add(other)
             db.session.commit()
@@ -335,6 +351,13 @@ class ProjectWorkspaceTests(unittest.TestCase):
         self.assertTrue(citation["view_url"].endswith("/file#page=1"))
         self.assertIn("40 bags", llm.call_args.args[2])
         self.assertIn("Reporting date: 2026-11-19", llm.call_args.args[2])
+        with patch("siteintel.documents.qa.settings.llm_settings", return_value=None):
+            answer = self.client.post(f"{base}/ask", json={"question": "What happened on 2026-11-19?"})
+            self.assertEqual(answer.json["status"], "answered")
+            self.assertEqual(answer.json["citations"][0]["document_id"], generated_id)
+            self.assertEqual(answer.json["citations"][0]["reporting_date"], reporting_date)
+            missing = self.client.post(f"{base}/ask", json={"question": "What happened on 2026-11-18?"})
+            self.assertEqual(missing.json["status"], "no_answer")
 
         with patch("siteintel.documents.qa.settings.llm_settings", return_value=object()), \
              patch("siteintel.documents.qa.llm.generate", return_value=(
@@ -408,6 +431,39 @@ class ProjectWorkspaceTests(unittest.TestCase):
             ).all()
             self.assertTrue(any("41 bags" in chunk.text for chunk in chunks))
             self.assertFalse(any("40 bags" in chunk.text for chunk in chunks))
+
+    def test_daily_report_costs_are_reviewable_and_source_linked(self):
+        document_id = self.upload(
+            "Material cost: BDT 230.00\nWork completed: Foundation excavation",
+            reporting_date="2026-11-19",
+        )
+        path = f"/api/reports/documents/{document_id}"
+        review = self.client.get(path).json
+        self.assertEqual(self.client.post(
+            path + "/confirm", json={"fields": review["fields"], "review_id": None}
+        ).status_code, 200)
+        generated = self.client.post(
+            f"/api/reports/projects/{self.project_id}/builder/generate",
+            json={"reporting_date": "2026-11-19"},
+        )
+        self.assertEqual(generated.status_code, 201)
+        from siteintel.projects.models import FinancialObservation
+        with self.app.app_context():
+            observation = db.session.scalar(db.select(FinancialObservation).where(
+                FinancialObservation.project_id == self.project_id,
+                FinancialObservation.kind == "direct_expense",
+            ))
+            self.assertIsNotNone(observation)
+            self.assertEqual(observation.status, "pending")
+            observation_id, report_document_id = observation.id, observation.document_id
+        self.assertEqual(self.client.post(
+            f"/projects/{self.project_id}/finance/observations/{observation_id}/review",
+            data={"decision": "confirmed"},
+        ).status_code, 302)
+        page = self.client.get(f"/dashboard/projects/{self.project_id}/expenses/").get_data(as_text=True)
+        self.assertIn("BDT 230.00", page)
+        self.assertIn(f"/documents/{report_document_id}/file#page=1", page)
+        self.assertEqual(self.client.get(f"/api/projects/{self.project_id}").status_code, 200)
 
     def test_generated_report_index_keeps_repeated_page_content(self):
         document_id = self.upload("Cement received: 40 bags", reporting_date="2026-11-19")

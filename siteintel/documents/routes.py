@@ -198,6 +198,8 @@ def delete_document(project_id, document_id):
         )
     storage_key = document.storage_key
     try:
+        from siteintel.projects.models import FinancialObservation
+        db.session.execute(db.delete(FinancialObservation).where(FinancialObservation.document_id == document.id))
         db.session.execute(db.delete(DocumentChunk).where(DocumentChunk.document_id == document.id))
         db.session.delete(document)
         db.session.commit()

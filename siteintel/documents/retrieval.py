@@ -27,6 +27,10 @@ _DATE = re.compile(
     r"\s+\d{4})\b",
     re.IGNORECASE,
 )
+_SUMMARY_WORDS = frozenset(
+    "what happened happen occurred occur summary summarize summarise overview "
+    "daily day report reports construction site work activity activities".split()
+)
 
 
 @dataclass(frozen=True)
@@ -133,6 +137,26 @@ def search_project_documents(
         return result
 
     query_text, requested_dates = _query_text_and_dates(question)
+    summary_terms = set(tokenize(query_text))
+    summary_vocabulary = set(tokenize(" ".join(_SUMMARY_WORDS)))
+    is_summary = bool(summary_terms) and summary_terms <= summary_vocabulary and bool(
+        re.search(r"\b(?:happened|occurred|summary|summari[sz]e|overview)\b", query_text, re.I)
+    )
+    if is_summary:
+        report_rows = [
+            row for row in rows
+            if row.reporting_date and (not requested_dates or row.reporting_date in requested_dates)
+        ]
+        report_rows.sort(key=lambda row: (-row.reporting_date.toordinal(), row.page_number, row.id))
+        for row in report_rows[:top_k]:
+            result.chunks.append(SourceChunk(
+                chunk_id=row.id, document_id=row.document_id, document_name=row.file_name,
+                category=row.category, page_number=row.page_number, text=row.text,
+                excerpt=_excerpt(row.text, set()), score=1.0, coverage=1.0,
+                reporting_date=row.reporting_date.isoformat(),
+            ))
+        result.sufficient = bool(result.chunks)
+        return result
     unigrams, bigrams, _ = term_counts(query_text)
     unigram_terms = set(unigrams)
     query_terms = unigram_terms | set(bigrams)
