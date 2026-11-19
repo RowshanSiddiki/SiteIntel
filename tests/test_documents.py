@@ -470,12 +470,15 @@ class MigrationTests(unittest.TestCase):
         config = AlembicConfig(str(Path(__file__).resolve().parents[1] / "migrations" / "alembic.ini"))
         config.set_main_option("script_location", str(Path(__file__).resolve().parents[1] / "migrations"))
         script = ScriptDirectory.from_config(config)
-        self.assertEqual(script.get_heads(), ["7d2e8f31b4c5"])
+        self.assertEqual(script.get_heads(), ["8af3c21d7e90"])
         revision = script.get_revision("7d2e8f31b4c5")
         self.assertEqual(revision.down_revision, "6c1d4e7a9b20")
         source = Path(revision.path).read_text()
         self.assertIn("document_chunks", source)
-        self.assertNotIn("drop_table(\"documents\"", source)
+        self.assertNotIn('drop_table("documents"', source)
+        latest = script.get_revision("8af3c21d7e90")
+        self.assertEqual(latest.down_revision, "7d2e8f31b4c5")
+        self.assertIn("daily_construction_reports", Path(latest.path).read_text())
 
 
 if __name__ == "__main__":

@@ -13,6 +13,7 @@ from siteintel.documents.processing import process_document
 from siteintel.documents.qa import answer_project_question, search_project_documents
 from siteintel.extensions import db
 from siteintel.projects import DOCUMENT_CATEGORIES, Document, DocumentChunk, get_accessible_project
+from siteintel.reports.models import DailyConstructionReport
 
 logger = logging.getLogger(__name__)
 
@@ -185,6 +186,16 @@ def delete_document(project_id, document_id):
     document = _knowledge_document(project_id, document_id)
     if document is None:
         return _error("document_not_found", "Document not found.", 404)
+    if db.session.scalar(
+        db.select(DailyConstructionReport.id).where(
+            DailyConstructionReport.document_id == document.id
+        )
+    ) is not None:
+        return _error(
+            "generated_report",
+            "Generated reports are retained in project report history and cannot be deleted from Document Assistant.",
+            409,
+        )
     storage_key = document.storage_key
     try:
         db.session.execute(db.delete(DocumentChunk).where(DocumentChunk.document_id == document.id))
@@ -270,6 +281,7 @@ def search(project_id):
         "number": number, "document_id": c.document_id, "document_name": c.document_name,
         "category": c.category, "category_label": DOCUMENT_CATEGORIES.get(c.category, c.category),
         "page_number": c.page_number, "excerpt": c.excerpt,
+        "reporting_date": c.reporting_date,
         "relevance": round(c.coverage * 100),
     } for number, c in enumerate(result.chunks, start=1)]
     _with_links(project_id, passages)

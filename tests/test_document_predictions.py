@@ -54,6 +54,7 @@ class DocumentPredictionTests(unittest.TestCase):
             "TESTING": True, "SECRET_KEY": "test-key-that-is-long-enough-for-siteintel",
             "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:", "SQLALCHEMY_ENGINE_OPTIONS": {},
             "WTF_CSRF_ENABLED": False, "REPORT_UPLOAD_ROOT": self.directory.name,
+            "HANDWRITING_OCR_ENDPOINT": "", "HANDWRITING_OCR_KEY": "",
         })
         self.client = self.app.test_client()
         with self.app.app_context():

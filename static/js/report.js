@@ -32,8 +32,12 @@
     const headers = new Headers(options.headers || {});
     headers.set("X-CSRFToken", token);
     const response = await fetch(url, { ...options, headers, credentials: "same-origin" });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data?.error?.message || "The request failed.");
+    const body = await response.text();
+    let data = {};
+    try { data = body ? JSON.parse(body) : {}; } catch { /* Non-JSON server errors use the status below. */ }
+    if (!response.ok) {
+      throw new Error(data?.error?.message || `Could not load project data (HTTP ${response.status}).`);
+    }
     return data;
   };
   const json = (value) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(value) });
@@ -48,6 +52,14 @@
     if (className) element.className = className;
     parent.append(element);
     return element;
+  };
+  const renderLoadError = (element, retry) => {
+    if (!element) return;
+    element.replaceChildren();
+    text(element, "p", "Could not load this section.", "empty-copy");
+    const button = text(element, "button", "Retry", "text-button");
+    button.type = "button";
+    button.addEventListener("click", retry, { once: true });
   };
   const date = (value) => value ? value.slice(0, 10) : "";
   const displayPreview = (url, isPdf) => {
@@ -252,10 +264,20 @@
   const refreshPredictions = async () => {
     if (!project || !(predictionsBox || overviewPredictions)) return;
     const id = project.id;
-    const data = await api(`/api/projects/${id}/predictions`);
-    if (project?.id !== id) return;
-    renderPredictions(data);
-    renderPredictionSummary(data);
+    try {
+      const data = await api(`/api/projects/${id}/predictions`);
+      if (project?.id !== id) return;
+      renderPredictions(data);
+      renderPredictionSummary(data);
+      message(workspaceError, "");
+    } catch (failure) {
+      if (project?.id !== id) return;
+      renderLoadError(predictionsBox || overviewPredictions, () => refreshPredictions());
+      if (predictionsBox && overviewPredictions) {
+        renderLoadError(overviewPredictions, () => refreshPredictions());
+      }
+      if (workspaceError) message(workspaceError, failure.message);
+    }
   };
 
   const reportRow = (documentItem, withReview) => {
@@ -296,7 +318,15 @@
       if (serial !== generation) return;
       renderProject(data);
       await refreshPredictions();
-    } catch (failure) { if (serial === generation) message(workspaceError, failure.message); }
+    } catch (failure) {
+      if (serial !== generation) return;
+      message(workspaceError, failure.message);
+      renderLoadError(overviewReports, () => loadProject(id));
+      renderLoadError(historyBox, () => loadProject(id));
+      renderLoadError(overviewPredictions, () => loadProject(id));
+      renderLoadError(predictionsBox, () => loadProject(id));
+      renderLoadError(reportList, () => loadProject(id));
+    }
   };
 
   if (form) {

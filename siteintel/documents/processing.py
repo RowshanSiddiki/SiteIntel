@@ -58,7 +58,17 @@ def process_document(document_id: int, *, force: bool = False) -> str:
         if path is None:
             raise ExtractionError("The stored file could not be found.")
         extraction = extract_pdf_pages(path)
-        cleaned = strip_repeated_lines([clean_text(page.text) for page in extraction.pages])
+        cleaned = [clean_text(page.text) for page in extraction.pages]
+        from siteintel.reports.models import DailyConstructionReport
+
+        is_daily_report = db.session.scalar(
+            db.select(DailyConstructionReport.id).where(
+                DailyConstructionReport.document_id == document_id,
+                DailyConstructionReport.project_id == document.project_id,
+            )
+        ) is not None
+        if not is_daily_report:
+            cleaned = strip_repeated_lines(cleaned)
         rows = []
         for page, text in zip(extraction.pages, cleaned):
             for piece in chunk_page(text):

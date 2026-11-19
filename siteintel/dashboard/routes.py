@@ -21,12 +21,14 @@ from siteintel.projects import (
     get_accessible_project,
     get_owned_project,
 )
+from siteintel.reports.models import DailyConstructionReport
 
 logger = logging.getLogger(__name__)
 
 # slug -> (label, icon, template). The overview uses the bare workspace URL.
 WORKSPACE_SECTIONS = {
     "ml-predictions": ("ML Predictions", "chart", "project/ml_predictions.html"),
+    "report-builder": ("Report Builder", "file-text", "project/report_builder.html"),
     "document-assistant": ("Document Assistant", "file-search", "project/document_assistant.html"),
     "expenses": ("Expenses & Bills", "wallet", "project/expenses.html"),
     "ai-agent": ("AI Agent", "bot", "project/ai_agent.html"),
@@ -116,6 +118,25 @@ def project_workspace(project_id):
     progress = latest_progress([project.id]).get(project.id)
     return render_template(
         "project/overview.html", progress=progress, **_workspace_context(project, "overview")
+    )
+
+
+@dashboard_bp.get("/projects/<int:project_id>/report-builder/<int:report_id>/")
+@login_required
+def daily_report_detail(project_id, report_id):
+    project = _project_or_404(project_id)
+    report = db.session.scalar(
+        db.select(DailyConstructionReport).where(
+            DailyConstructionReport.id == report_id,
+            DailyConstructionReport.project_id == project.id,
+        )
+    )
+    if report is None:
+        abort(404)
+    return render_template(
+        "project/daily_report.html",
+        report=report,
+        **_workspace_context(project, "report-builder"),
     )
 
 

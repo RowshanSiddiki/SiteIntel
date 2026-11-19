@@ -7,6 +7,11 @@
   const token = $('meta[name="csrf-token"]')?.content || "";
   const base = `/api/projects/${root.dataset.projectId}/documents`;
   let editable = false;
+  const questionPrefill = new URLSearchParams(window.location.search).get("q");
+  if (questionPrefill && $("#doc-question")) {
+    $("#doc-question").value = questionPrefill.slice(0, 1000);
+    $("#doc-ask-panel")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
 
   const el = (tag, className, text) => {
     const node = document.createElement(tag);
@@ -77,7 +82,7 @@
       const actions = el("td", "doc-actions");
       actions.append(link("View", doc.view_url), link("Download", doc.download_url, true));
       if (editable) {
-        if (doc.status === "failed" || doc.status === "pending") {
+        if (doc.status !== "processing") {
           const retry = el("button", "button button-secondary button-small", "Reprocess");
           retry.type = "button";
           retry.addEventListener("click", () => act(retry, () => api(`/${doc.id}/process?force=1`, { method: "POST" })));
@@ -169,6 +174,7 @@
     const card = el("li", "doc-citation");
     const title = el("div", "doc-citation-title");
     title.append(el("strong", null, `[${c.number}] ${c.document_name}`), el("span", "badge", `Page ${c.page_number}`));
+    if (c.reporting_date) title.append(el("span", "badge", `Report date ${c.reporting_date}`));
     const open = link("Open at page " + c.page_number, c.view_url);
     card.append(title, el("blockquote", null, c.excerpt), open);
     return card;

@@ -95,6 +95,25 @@ def save_pdf(upload: FileStorage, project_id: int) -> StoredFile:
     return StoredFile(storage_key, path, digest.hexdigest(), size)
 
 
+def save_pdf_bytes(data: bytes, project_id: int) -> StoredFile:
+    """Store an application-generated PDF in the same project-scoped store."""
+    if not isinstance(data, bytes) or not data.startswith(b"%PDF-") or len(data) > settings.max_upload_bytes():
+        raise InvalidDocument("The generated PDF is invalid or exceeds the file size limit.")
+    directory = storage_root() / str(project_id)
+    directory.mkdir(mode=0o700, exist_ok=True)
+    storage_key = f"{project_id}/{uuid4().hex}.pdf"
+    path = storage_root() / storage_key
+    digest = hashlib.sha256(data).hexdigest()
+    try:
+        with path.open("xb") as target:
+            os.chmod(path, 0o600)
+            target.write(data)
+    except OSError:
+        path.unlink(missing_ok=True)
+        raise
+    return StoredFile(storage_key, path, digest, len(data))
+
+
 def delete_file(storage_key: str, project_id: int) -> None:
     path = resolve_path(storage_key, project_id)
     if path is not None:

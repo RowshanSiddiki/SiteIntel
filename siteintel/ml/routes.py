@@ -270,7 +270,10 @@ def project_details(project_id):
     for item in sorted(reviews, key=lambda review: review.id):
         (later_reviews if item.document_id in first_review else []).append(item)
         first_review.setdefault(item.document_id, item)
-    names = {document.id: document.file_name for document in documents}
+    project_documents = db.session.scalars(
+        db.select(Document).where(Document.project_id == project_id)
+    ).all()
+    names = {document.id: document.file_name for document in project_documents}
     generated = {}
     for item in sorted(predictions, key=lambda prediction: prediction.id):
         if item.status == "complete":

@@ -1,0 +1,44 @@
+{% extends "project/base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Report Builder · {{ project.name }} · SiteIntel{% endblock %}
+{% block section %}
+<section class="builder-toolbar panel">
+  <div>
+    <p class="eyebrow">Daily reporting</p>
+    <h2>Build a site report</h2>
+    <p class="muted">Add the day’s documents, verify the extracted details, and generate one report.</p>
+  </div>
+  <label class="builder-date-label" for="builder-date">Reporting date
+    <input id="builder-date" type="date" value="{{ '' }}">
+  </label>
+</section>
+
+<section class="panel builder-upload-panel">
+  <form id="builder-upload-form" class="builder-upload-form">
+    <label class="builder-dropzone" for="builder-files">
+      <span class="builder-upload-icon">{{ icon("upload", 24) }}</span>
+      <strong>Add site documents</strong>
+      <span>PDF, JPG, or PNG · select multiple files</span>
+      <input id="builder-files" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" multiple required>
+    </label>
+    <button id="builder-upload-button" class="button button-primary" type="submit">Upload documents</button>
+  </form>
+  <progress id="builder-progress" max="100" value="0" hidden></progress>
+  <p id="builder-status" class="muted" role="status" hidden></p>
+  <p id="builder-error" class="form-error" role="alert" hidden></p>
+</section>
+
+<section class="panel">
+  <div class="panel-head builder-section-head">
+    <div><h2>Documents for this date</h2><p id="builder-date-caption" class="muted"></p></div>
+    <button id="builder-generate" class="button button-primary" type="button" disabled>Generate daily report</button>
+  </div>
+  <div id="builder-intake"><p class="muted">Choose a reporting date.</p></div>
+</section>
+
+<section class="panel">
+  <div class="panel-head"><h2>Report history</h2></div>
+  <div id="builder-history"><p class="muted">Loading reports…</p></div>
+</section>
+{% endblock %}
+{% block page_scripts %}<script defer src="{{ url_for('static', filename='js/report_builder.js', v='20261119-4') }}"></script>{% endblock %}

@@ -1,0 +1,49 @@
+{% extends "project/base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}Daily Report · {{ project.name }} · SiteIntel{% endblock %}
+{% block section %}
+<section class="panel daily-report-heading">
+  <div>
+    <p class="eyebrow">Daily construction report</p>
+    <h2>{{ report.reporting_date.strftime("%B %-d, %Y") }}</h2>
+    <p class="muted">{{ report.generated_document.file_name }}</p>
+  </div>
+  <div class="daily-report-actions">
+    <a class="button button-secondary" href="{{ url_for('dashboard.project_section', project_id=project.id, section='ml-predictions') }}">Run ML Predictions</a>
+    <a class="button button-secondary" href="{{ url_for('dashboard.project_section', project_id=project.id, section='document-assistant') }}?q=What%20work%20was%20completed%20in%20this%20daily%20construction%20report%3F">Ask AI about this Report</a>
+    <a class="button button-primary" href="{{ url_for('reports.download_daily_report', project_id=project.id, report_id=report.id) }}">Download PDF</a>
+  </div>
+</section>
+
+<section class="panel daily-report-body">
+  <div class="daily-report-meta">
+    <span>{{ project.name }}</span>
+    {% if project.location %}<span>{{ project.location }}</span>{% endif %}
+    <span>{{ report.source_documents|length }} source document{{ "" if report.source_documents|length == 1 else "s" }}</span>
+    <span>Search index: {{ report.generated_document.processing_status|capitalize }}</span>
+  </div>
+  {% for section in report.fields.get("sections", []) %}
+  <section class="daily-report-section">
+    <h3>{{ section.name }}</h3>
+    {% for item in section["items"] %}
+    <div class="daily-report-field">
+      <strong>{{ item.label }}</strong>
+      <p>{{ item.value }}</p>
+      <small>Source: {{ item.source_name }}</small>
+    </div>
+    {% endfor %}
+  </section>
+  {% else %}
+  <p class="empty-copy">No labeled information was extracted from these documents.</p>
+  {% endfor %}
+</section>
+
+<section class="panel">
+  <div class="panel-head"><h2>Source documents</h2></div>
+  <ul class="daily-report-sources">
+    {% for source in report.source_documents %}
+    <li><a href="{{ url_for('reports.project_report_file', document_id=source.id) }}" target="_blank" rel="noopener">{{ source.file_name }}</a></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endblock %}

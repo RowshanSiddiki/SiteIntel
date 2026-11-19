@@ -6,8 +6,11 @@
   <a class="nav-back" href="{{ url_for('dashboard.index') }}" title="All projects" aria-label="All projects">{{ icon("arrow-left") }}<span>All projects</span></a>
   <p class="nav-heading" title="{{ project.name }}">{{ project.name }}</p>
   <a href="{{ url_for('dashboard.project_workspace', project_id=project.id) }}" title="Overview" aria-label="Overview" {% if section == 'overview' %}class="active" aria-current="page"{% endif %}>{{ icon("dashboard") }}<span>Overview</span></a>
+  <a href="{{ url_for('dashboard.project_section', project_id=project.id, section='report-builder') }}" title="Report Builder" aria-label="Report Builder" {% if section == 'report-builder' %}class="active" aria-current="page"{% endif %}>{{ icon("file-text") }}<span>Report Builder</span></a>
   {% for slug, (label, glyph, _template) in sections.items() %}
+  {% if slug != 'report-builder' %}
   <a href="{{ url_for('dashboard.project_section', project_id=project.id, section=slug) }}" title="{{ label }}" aria-label="{{ label }}" {% if section == slug %}class="active" aria-current="page"{% endif %}>{{ icon(glyph) }}<span>{{ label }}</span></a>
+  {% endif %}
   {% endfor %}
 </nav>
 {% endblock %}

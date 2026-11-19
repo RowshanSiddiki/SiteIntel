@@ -11,6 +11,7 @@ from PIL import Image, ImageDraw, ImageFont
 from siteintel import create_app
 from siteintel.ml.model_registry import ModelRegistry
 from siteintel.reports.extraction import extract_report_fields
+from siteintel.reports.handwriting_ocr import OcrLine, OcrResult
 from siteintel.reports.ocr import extract_ocr
 
 
@@ -34,6 +35,8 @@ class ConstructionReportTests(unittest.TestCase):
                 "SESSION_COOKIE_SECURE": False,
                 "MAX_CONTENT_LENGTH": 10 * 1024 * 1024,
                 "REPORT_UPLOAD_ROOT": self.upload_directory.name,
+                "HANDWRITING_OCR_ENDPOINT": "",
+                "HANDWRITING_OCR_KEY": "",
             }
         )
         self.client = self.app.test_client()
@@ -133,7 +136,7 @@ class ConstructionReportTests(unittest.TestCase):
         token = self._login()
         response = self._extract(token)
 
-        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.status_code, 201, response.json)
         self.assertEqual(
             response.json["extracted_information"],
             {
@@ -155,6 +158,36 @@ class ConstructionReportTests(unittest.TestCase):
             Path(self.upload_directory.name).glob(f"*/{report_id}.json")
         )
         self.assertEqual(len(report_records), 1)
+
+    def test_handwriting_text_and_low_confidence_notes_reach_review(self):
+        token = self._login()
+        text = "rain_mm: 12 mm\nRain delayed the concrete pour."
+        result = OcrResult(
+            text=text,
+            provider="azure_document_intelligence",
+            handwriting_detected=True,
+            lines=[
+                OcrLine("rain_mm: 12 mm", 0.94),
+                OcrLine("Rain delayed the concrete pour.", 0.54, True),
+            ],
+        )
+        stream, filename = self._image_upload()
+        with patch("siteintel.reports.routes._extract_uploaded_document", return_value=result):
+            response = self.client.post(
+                "/api/reports/extract",
+                data={"image": (stream, filename)},
+                headers={"X-CSRFToken": token},
+                content_type="multipart/form-data",
+            )
+
+        self.assertEqual(response.status_code, 201, response.json)
+        self.assertEqual(response.json["ocr"]["provider"], "azure_document_intelligence")
+        self.assertTrue(response.json["ocr"]["handwriting_detected"])
+        self.assertIn("Site notes", response.json["extracted_information"]["report"])
+        self.assertEqual(response.json["ocr"]["low_confidence_fields"], ["Site notes"])
+        saved = self.client.get(f"/api/reports/{response.json['report_id']}")
+        self.assertEqual(saved.json["extracted_information"]["report"]["Site notes"],
+                         "Rain delayed the concrete pour.")
 
     def test_uploaded_report_is_not_visible_to_another_user(self):
         token = self._login()

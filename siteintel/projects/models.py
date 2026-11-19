@@ -202,6 +202,7 @@ class Document(TimestampMixin, db.Model):
     processing_error = db.Column(String(500))
     page_count = db.Column(db.Integer)
     processed_at = db.Column(DateTime(timezone=True))
+    reporting_date = db.Column(Date, nullable=True, index=True)
 
     project = db.relationship("Project", back_populates="documents")
     uploaded_by = db.relationship("User", back_populates="uploaded_documents")

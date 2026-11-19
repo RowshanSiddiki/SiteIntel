@@ -28,6 +28,9 @@ class Config:
     PERMANENT_SESSION_LIFETIME = 60 * 60 * 8
     WTF_CSRF_TIME_LIMIT = 3600
     DELAY_RISK_THRESHOLD = 0.5
+    HANDWRITING_OCR_ENDPOINT = os.getenv("HANDWRITING_OCR_ENDPOINT", "").strip()
+    HANDWRITING_OCR_KEY = os.getenv("HANDWRITING_OCR_KEY", "").strip()
+    HANDWRITING_OCR_TIMEOUT_SECONDS = os.getenv("HANDWRITING_OCR_TIMEOUT_SECONDS", "60").strip()
 
     @classmethod
     def database_uri(cls) -> URL:
