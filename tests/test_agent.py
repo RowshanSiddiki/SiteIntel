@@ -23,6 +23,7 @@ from siteintel.projects.models import (
     ProjectMember,
 )
 from siteintel.reports.models import DailyConstructionReport
+from sqlalchemy.exc import SQLAlchemyError
 
 
 class AgentTests(unittest.TestCase):
@@ -370,6 +371,34 @@ class AgentTests(unittest.TestCase):
             {"partial", "unlinked"},
         )
 
+    def test_overpaid_expenses_keep_actual_totals_and_never_report_negative_unpaid(self):
+        with self.app.app_context():
+            db.session.add(Expense(
+                project_id=self.project_id,
+                created_by_id=self.user_ids["owner"],
+                expense_date=date(2026, 11, 24),
+                category="Materials",
+                description="Overpaid delivery",
+                amount=Decimal("100.00"),
+                currency="USD",
+                paid_amount=Decimal("120.00"),
+                status="approved",
+            ))
+            db.session.commit()
+            result = execute_tool(self.project_id, "get_expense_summary", {})
+
+        totals = result["expense_totals"][0]
+        self.assertEqual(totals["currency"], "USD")
+        self.assertEqual(totals["category"], "Materials")
+        self.assertEqual(totals["amount"], "100.00")
+        self.assertEqual(totals["paid_amount"], "120.00")
+        self.assertEqual(Decimal(totals["unpaid_amount"]), Decimal("0"))
+        self.assertEqual(result["recent_expenses"][0]["amount"], "100.00")
+        self.assertEqual(result["recent_expenses"][0]["paid_amount"], "120.00")
+        self.assertEqual(
+            Decimal(result["recent_expenses"][0]["unpaid_amount"]), Decimal("0")
+        )
+
     def test_multi_step_task_executes_multiple_tools_before_answering(self):
         responses = [
             ToolResponse(None, [ToolCall("overview-1", "get_project_overview", {})]),
@@ -404,6 +433,12 @@ class AgentTests(unittest.TestCase):
                     "to_date": "2026-11-20",
                     "project_id": self.other_project_id,
                 })
+            for model_key in ([], {}, True, 7):
+                with self.subTest(model_key=model_key):
+                    with self.assertRaises(ToolArgumentError):
+                        execute_tool(self.project_id, "get_ml_predictions", {
+                            "model_key": model_key,
+                        })
 
     def test_conversations_are_isolated_by_project_and_user(self):
         with patch(
@@ -444,6 +479,29 @@ class AgentTests(unittest.TestCase):
         self.assertEqual(response.json["error"]["code"], "agent_unavailable")
         with self.app.app_context():
             self.assertEqual(db.session.query(AgentConversation).count(), 0)
+
+    def test_conversation_list_and_detail_database_errors_return_json(self):
+        with self.app.app_context(), patch(
+            "siteintel.agent.routes.db.session.scalars",
+            side_effect=SQLAlchemyError("database unavailable"),
+        ):
+            list_response = self.client.get(
+                f"/api/projects/{self.project_id}/agent/conversations"
+            )
+
+        self.assertEqual(list_response.status_code, 500)
+        self.assertEqual(list_response.json["error"]["code"], "agent_storage_error")
+
+        with patch(
+            "siteintel.agent.routes._owned_conversation",
+            side_effect=SQLAlchemyError("database unavailable"),
+        ):
+            detail_response = self.client.get(
+                f"/api/projects/{self.project_id}/agent/conversations/1"
+            )
+
+        self.assertEqual(detail_response.status_code, 500)
+        self.assertEqual(detail_response.json["error"]["code"], "agent_storage_error")
 
     def test_sensitive_unregistered_actions_are_not_executable(self):
         with self.app.app_context():

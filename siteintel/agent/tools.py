@@ -198,7 +198,9 @@ def _validated_args(name: str, arguments: Any) -> dict:
             raise ToolArgumentError("question must contain 3 to 1000 characters.")
     elif name == "get_ml_predictions":
         model_key = arguments.get("model_key")
-        if model_key is not None and model_key not in MODEL_NAMES:
+        if model_key is not None and (
+            not isinstance(model_key, str) or model_key not in MODEL_NAMES
+        ):
             raise ToolArgumentError("model_key must identify a supported prediction.")
     elif name == "get_expense_summary":
         start = _validate_date(arguments.get("start_date"), "start_date")
@@ -399,7 +401,10 @@ def _expense_summary(project_id: int, arguments: dict) -> dict:
             Expense.category,
             func.sum(Expense.amount),
             func.sum(Expense.paid_amount),
-            func.sum(Expense.amount - Expense.paid_amount),
+            func.sum(case(
+                (Expense.amount > Expense.paid_amount, Expense.amount - Expense.paid_amount),
+                else_=Decimal("0.00"),
+            )),
         )
         .where(Expense.project_id == project_id)
     )
@@ -585,7 +590,7 @@ def _expense_summary(project_id: int, arguments: dict) -> dict:
                 "vendor": item.vendor[:160] if item.vendor else None,
                 "amount": str(item.amount),
                 "paid_amount": str(item.paid_amount),
-                "unpaid_amount": str(item.amount - item.paid_amount),
+                "unpaid_amount": str(max(Decimal("0"), item.amount - item.paid_amount)),
                 "currency": item.currency,
                 "status": item.status,
                 "payment_status": item.payment_status,

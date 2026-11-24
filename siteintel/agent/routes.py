@@ -23,11 +23,26 @@ def _error(code: str, message: str, status: int):
     return jsonify({"error": {"code": code, "message": message}}), status
 
 
+def _database_error(log_message: str, user_message: str):
+    db.session.rollback()
+    logger.exception(log_message)
+    return _error("agent_storage_error", user_message, 500)
+
+
 @agent_bp.before_request
 def _require_project_access():
     if not current_user.is_authenticated:
         return _error("authentication_required", "Please log in to continue.", 401)
-    if get_accessible_project(int(current_user.get_id()), request.view_args["project_id"]) is None:
+    try:
+        project = get_accessible_project(
+            int(current_user.get_id()), request.view_args["project_id"]
+        )
+    except SQLAlchemyError:
+        return _database_error(
+            "Could not verify access to the agent project",
+            "Project access could not be verified.",
+        )
+    if project is None:
         return _error("project_not_found", "Project not found.", 404)
     return None
 
@@ -107,27 +122,39 @@ def _decorate_actions(project_id: int, actions: list[dict]) -> list[dict]:
 
 @agent_bp.get("/conversations")
 def list_conversations(project_id: int):
-    conversations = db.session.scalars(
-        db.select(AgentConversation)
-        .where(
-            AgentConversation.project_id == project_id,
-            AgentConversation.user_id == int(current_user.get_id()),
+    try:
+        conversations = db.session.scalars(
+            db.select(AgentConversation)
+            .where(
+                AgentConversation.project_id == project_id,
+                AgentConversation.user_id == int(current_user.get_id()),
+            )
+            .order_by(AgentConversation.updated_at.desc(), AgentConversation.id.desc())
+            .limit(50)
+        ).all()
+        return jsonify({"conversations": [_conversation_summary(item) for item in conversations]})
+    except SQLAlchemyError:
+        return _database_error(
+            "Could not load agent conversations",
+            "Conversation history could not be loaded.",
         )
-        .order_by(AgentConversation.updated_at.desc(), AgentConversation.id.desc())
-        .limit(50)
-    ).all()
-    return jsonify({"conversations": [_conversation_summary(item) for item in conversations]})
 
 
 @agent_bp.get("/conversations/<int:conversation_id>")
 def get_conversation(project_id: int, conversation_id: int):
-    conversation = _owned_conversation(project_id, conversation_id)
-    if conversation is None:
-        return _error("conversation_not_found", "Conversation not found.", 404)
-    return jsonify({
-        "conversation": _conversation_summary(conversation),
-        "messages": conversation.messages,
-    })
+    try:
+        conversation = _owned_conversation(project_id, conversation_id)
+        if conversation is None:
+            return _error("conversation_not_found", "Conversation not found.", 404)
+        return jsonify({
+            "conversation": _conversation_summary(conversation),
+            "messages": conversation.messages,
+        })
+    except SQLAlchemyError:
+        return _database_error(
+            "Could not load agent conversation",
+            "Conversation history could not be loaded.",
+        )
 
 
 @agent_bp.post("/chat")
@@ -153,10 +180,16 @@ def chat(project_id: int):
         or conversation_id < 1
     ):
         return _error("invalid_conversation", "conversation_id must be a positive integer.", 400)
-    conversation = (
-        _owned_conversation(project_id, conversation_id)
-        if conversation_id is not None else None
-    )
+    try:
+        conversation = (
+            _owned_conversation(project_id, conversation_id)
+            if conversation_id is not None else None
+        )
+    except SQLAlchemyError:
+        return _database_error(
+            "Could not locate agent conversation",
+            "Conversation history could not be loaded.",
+        )
     if conversation_id is not None and conversation is None:
         return _error("conversation_not_found", "Conversation not found.", 404)
 
@@ -190,9 +223,10 @@ def chat(project_id: int):
         logger.warning("Agent language model call failed: %s", error)
         return _error("agent_unavailable", str(error), 503)
     except SQLAlchemyError:
-        db.session.rollback()
-        logger.exception("Could not save an agent conversation")
-        return _error("agent_storage_error", "The conversation could not be saved.", 500)
+        return _database_error(
+            "Could not save an agent conversation",
+            "The conversation could not be saved.",
+        )
 
     return jsonify({
         "conversation": _conversation_summary(conversation),
