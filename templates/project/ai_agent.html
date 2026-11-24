@@ -1,27 +1,44 @@
 {% extends "project/base.html" %}
-{% from "_icons.html" import icon %}
+{% block title %}AI Agent · {{ project.name }} · SiteIntel{% endblock %}
 {% block section %}
-{# Phase 4 integration point: mount the agent conversation and tool results on #ai-agent-module. #}
-<div id="ai-agent-module" data-phase="4">
-  <section class="panel">
-    <div class="panel-head"><h2>AI Agent</h2><span class="badge">Coming soon</span></div>
-    <p class="muted">Ask questions about this project in plain language. The agent will use only this project's data.</p>
-    <form class="inline-ask" onsubmit="return false">
-      <input type="text" placeholder="Ask a question about this project" disabled aria-label="Question">
-      <button class="button button-primary" type="button" disabled>Send</button>
+<div id="ai-agent" class="agent-layout">
+  <aside class="panel agent-history" aria-label="Conversation history">
+    <div class="panel-head">
+      <h2>Conversations</h2>
+      <button id="agent-new" class="button button-secondary button-small" type="button">New chat</button>
+    </div>
+    <p id="agent-history-status" class="muted" role="status"></p>
+    <nav id="agent-conversations" class="agent-conversation-list" aria-label="Project conversations"></nav>
+  </aside>
+
+  <section class="panel agent-chat" aria-label="Project AI Agent">
+    <div class="panel-head">
+      <div>
+        <h2>AI Agent</h2>
+        <p class="muted">Ask about this project. Responses use its reports, indexed documents, saved predictions, and expense records.</p>
+      </div>
+      <span class="badge">Project-scoped</span>
+    </div>
+    <div id="agent-messages" class="agent-messages" role="log" aria-live="polite" aria-relevant="additions">
+      <div class="empty-state compact">
+        <h3>How can I help with this project?</h3>
+        <p>Ask for a progress summary, report comparison, document search, saved prediction, or expense breakdown.</p>
+      </div>
+    </div>
+    <p id="agent-error" class="form-error" role="alert" hidden></p>
+    <p id="agent-status" class="muted" role="status" aria-live="polite"></p>
+    <form id="agent-form" class="agent-form">
+      <label class="sr-only" for="agent-question">Message</label>
+      <textarea id="agent-question" maxlength="1000" rows="3" placeholder="Ask a question about this project…" required></textarea>
+      <div class="agent-form-footer">
+        <span class="muted">The agent can retrieve and summarize data; it cannot change project records.</span>
+        <button id="agent-send" class="button button-primary" type="submit">Send</button>
+      </div>
     </form>
   </section>
-  <section class="panel">
-    <div class="panel-head"><h2>Planned capabilities</h2></div>
-    <div class="feature-grid">
-      {% for label, glyph in [("ML prediction tools", "chart"), ("Document retrieval with sources", "file-search"), ("Financial calculations", "wallet"), ("Dynamic charts", "activity"), ("PDF report generation", "file-text"), ("Email drafting", "mail")] %}
-      <div class="feature-tile is-disabled">{{ icon(glyph) }}<div><h3>{{ label }}</h3></div></div>
-      {% endfor %}
-    </div>
-  </section>
-  <section class="panel">
-    <div class="panel-head"><h2>Tool execution results</h2></div>
-    <div class="empty-state compact"><h3>Nothing to show yet</h3><p>Tool calls and their results will be listed here.</p></div>
-  </section>
 </div>
+{% endblock %}
+{% block page_scripts %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ai-agent.css') }}">
+<script defer src="{{ url_for('static', filename='js/ai_agent.js') }}"></script>
 {% endblock %}

@@ -470,7 +470,7 @@ class MigrationTests(unittest.TestCase):
         config = AlembicConfig(str(Path(__file__).resolve().parents[1] / "migrations" / "alembic.ini"))
         config.set_main_option("script_location", str(Path(__file__).resolve().parents[1] / "migrations"))
         script = ScriptDirectory.from_config(config)
-        self.assertEqual(script.get_heads(), ["2c87e4b91d10"])
+        self.assertEqual(script.get_heads(), ["b7a1e2c9d410"])
         self.assertEqual(script.get_revision("1f0a38d746b2").down_revision, "9be43f1862a1")
         self.assertEqual(script.get_revision("9be43f1862a1").down_revision, "8af3c21d7e90")
         revision = script.get_revision("7d2e8f31b4c5")
@@ -481,6 +481,11 @@ class MigrationTests(unittest.TestCase):
         latest = script.get_revision("8af3c21d7e90")
         self.assertEqual(latest.down_revision, "7d2e8f31b4c5")
         self.assertIn("daily_construction_reports", Path(latest.path).read_text())
+        agent = script.get_revision("b7a1e2c9d410")
+        self.assertEqual(agent.down_revision, "2c87e4b91d10")
+        agent_source = Path(agent.path).read_text()
+        self.assertIn('create_table(\n        "agent_conversations"', agent_source)
+        self.assertNotIn('drop_table("projects"', agent_source)
 
 
 if __name__ == "__main__":

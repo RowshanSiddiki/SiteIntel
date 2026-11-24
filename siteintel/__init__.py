@@ -49,6 +49,8 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
     login_manager.init_app(app)
 
     from siteintel.auth import auth_bp
+    from siteintel.agent import agent_bp
+    from siteintel.agent import models as agent_models
     from siteintel.dashboard import dashboard_bp
     from siteintel.documents import documents_bp
     from siteintel.expenses import expenses_bp
@@ -60,6 +62,7 @@ def create_app(test_config: Mapping[str, object] | None = None) -> Flask:
     from siteintel.reports import models as report_models
 
     app.register_blueprint(auth_bp)
+    app.register_blueprint(agent_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(ml_bp)
     app.register_blueprint(reports_bp)

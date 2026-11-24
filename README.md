@@ -320,8 +320,8 @@ capped at `DOCUMENT_MAX_OCR_PAGES`), cleaned, chunked (about 1000 characters,
 - **Settings (env):** `LLM_API_KEY`, `LLM_MODEL`, `LLM_BASE_URL`,
   `LLM_TIMEOUT_SECONDS`, `DOCUMENT_MAX_BYTES` (25 MB), `DOCUMENT_MAX_PAGES`
   (300), `DOCUMENT_MAX_OCR_PAGES` (20), `DOCUMENT_UPLOAD_ROOT`.
-- **Phase 4 interface** (`siteintel.documents.qa`; callers must authorise the
-  project first): `search_project_documents(project_id, question)`,
+- **Shared retrieval interface** (`siteintel.documents.qa`; callers must
+  authorise the project first): `search_project_documents(project_id, question)`,
   `answer_project_question(project_id, question)` and
   `get_document_sources(project_id, citations)`.
 - **Migration:** `7d2e8f31b4c5` is additive (5 nullable `documents` columns and
@@ -331,8 +331,28 @@ capped at `DOCUMENT_MAX_OCR_PAGES`), cleaned, chunked (about 1000 characters,
 Limitations: PDF only, processing runs inside the upload request, and the
 "enough evidence" threshold is a heuristic.
 
+## Project AI Agent (Phase 4)
+
+The project-scoped AI Agent is available at
+`/dashboard/projects/<id>/ai-agent/`. It uses the configured OpenAI-compatible
+chat endpoint (including Groq) with structured function calls, and stores
+conversations under both the authenticated user and project.
+
+The read-only tools retrieve project overview facts, generated daily reports,
+RAG-indexed document passages with source citations, current saved ML
+predictions, expense and bill summaries, and daily-report progress comparisons.
+The project-summary tool gathers these records for a grounded narrative. The
+agent never runs or retrains ML models. It does not expose record creation,
+editing, deletion, SQL, or shell tools, so it cannot change project data.
+
+The agent API is under `/api/projects/<id>/agent/`: `GET /conversations`,
+`GET /conversations/<conversation_id>`, and `POST /chat`. It uses the existing
+`LLM_API_KEY`, `LLM_MODEL`, `LLM_BASE_URL`, and `LLM_TIMEOUT_SECONDS` settings.
+Migration `b7a1e2c9d410` adds the user- and project-scoped conversation table;
+apply it with `flask --app siteintel:create_app db upgrade`.
+
 ## Future modules
 
 Authentication, dashboard, and reports are separate blueprints; database
-extensions and configuration are centralized in `siteintel/`. Contract RAG
-and the AI assistant are not part of this stage.
+extensions and configuration are centralized in `siteintel/`. Email and
+communication workflows remain future work.
