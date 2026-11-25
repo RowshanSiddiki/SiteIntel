@@ -15,15 +15,15 @@
 </nav>
 {% endblock %}
 {% block content %}
-<nav class="breadcrumb" aria-label="Breadcrumb">
+{% if section != 'overview' %}<nav class="breadcrumb" aria-label="Breadcrumb">
   <a href="{{ url_for('dashboard.index') }}">Dashboard</a><span aria-hidden="true">/</span>
   {% if section == 'overview' %}<span aria-current="page">{{ project.name }}</span>
   {% else %}<a href="{{ url_for('dashboard.project_workspace', project_id=project.id) }}">{{ project.name }}</a><span aria-hidden="true">/</span><span aria-current="page">{{ sections[section][0] }}</span>{% endif %}
-</nav>
+</nav>{% endif %}
 <section class="project-header">
   <div>
     <h1>{{ project.name }}</h1>
-    <p class="project-meta">{{ icon("map-pin", 15) }}<span>{{ project.location or "No location set" }}</span></p>
+    {% if project.location %}<p class="project-meta">{{ icon("map-pin", 15) }}<span>{{ project.location }}</span></p>{% endif %}
   </div>
   <span class="status-pill status-{{ project.status }}">{{ status_labels.get(project.status, project.status) }}</span>
 </section>

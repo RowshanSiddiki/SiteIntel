@@ -127,41 +127,81 @@
     return list;
   };
 
+  const SVG = "http://www.w3.org/2000/svg";
+  const ICONS = {
+    check: '<path d="M20 6 9 17l-5-5"/>',
+    upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>',
+    chart: '<path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>',
+    dot: '<circle cx="12" cy="12" r="3"/>',
+    doc: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
+    flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/>',
+  };
+  const smallIcon = (name) => {
+    const svg = document.createElementNS(SVG, "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("width", "14");
+    svg.setAttribute("height", "14");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "2");
+    svg.setAttribute("stroke-linecap", "round");
+    svg.setAttribute("stroke-linejoin", "round");
+    svg.setAttribute("aria-hidden", "true");
+    svg.innerHTML = ICONS[name] || ICONS.dot;
+    return svg;
+  };
+  const shortDate = (value) => value
+    ? new Date(value).toLocaleDateString("en", { month: "short", day: "numeric" }) : "";
+  const EVENT_ICONS = {
+    report_confirmed: "check", report_updated: "check", report_uploaded: "upload",
+    predictions_generated: "chart", project_created: "flag", construction_record: "doc", expense: "doc",
+  };
+
   // Overview shows the newest events first; the API returns oldest first.
   const renderHistory = (items) => {
     if (!historyBox) return;
     historyBox.replaceChildren();
-    const recent = items.slice().reverse().slice(0, 6);
+    const recent = items.slice().reverse().slice(0, 4);
     if (!recent.length) text(historyBox, "p", "No activity yet.", "empty-copy");
     for (const item of recent) {
       const row = document.createElement("div");
       row.className = "history-item";
+      const badge = document.createElement("span");
+      badge.className = "ov-icon";
+      badge.append(smallIcon(EVENT_ICONS[item.type]));
+      row.append(badge);
       const info = document.createElement("span");
+      info.className = "ov-grow";
       text(info, "strong", item.description);
-      if (item.report) text(info, "small", item.report);
+      if (item.report) text(info, "small", ` · ${item.report}`, "ov-ellipsis");
       row.append(info);
-      text(row, "time", date(item.time), "muted");
+      text(row, "time", shortDate(item.time), "muted");
       historyBox.append(row);
     }
   };
 
+  const PREDICTION_CARDS = [
+    ["delay_risk", "Construction Delay Risk",
+     (r) => `${r.delay_risk} · ${Math.round(r.delay_probability * 100)}%`],
+    ["concrete_strength", "Concrete Strength", (r) => `${r.compressive_strength_mpa.toFixed(2)} MPa`],
+    ["cement_demand", "Cement Demand", (r) => `${r.predicted_consumption_tonnes.toFixed(2)} tonnes`],
+  ];
   const renderPredictionSummary = (data) => {
     if (!overviewPredictions) return;
     overviewPredictions.replaceChildren();
-    if (!data.current.length) {
-      text(overviewPredictions, "p", "Predictions appear here once a report is confirmed.", "empty-copy");
-      return;
-    }
-    for (const item of data.current) {
-      const row = document.createElement("div");
-      row.className = "list-row";
-      const info = document.createElement("span");
-      text(info, "strong", item.model_name);
-      text(info, "small", item.document_name);
-      row.append(info);
-      if (item.result) text(row, "strong", resultText(item), "result-inline");
-      else text(row, "span", item.status === "unavailable" ? "Unavailable" : "Needs information", "prediction-status pending");
-      overviewPredictions.append(row);
+    const href = overviewPredictions.dataset.href;
+    for (const [key, title, format] of PREDICTION_CARDS) {
+      const item = data.current.find((entry) => entry.model_key === key);
+      const card = document.createElement("a");
+      card.className = "ov-card";
+      card.href = href;
+      text(card, "span", title, "ov-card-title");
+      if (item && item.result) text(card, "strong", format(item.result), "ov-card-value");
+      else text(card, "strong", "—", "ov-card-value ov-none");
+      if (!item || !item.result) {
+        text(card, "small", item && item.status === "unavailable" ? "Unavailable" : "No prediction yet", "muted");
+      }
+      overviewPredictions.append(card);
     }
   };
 
@@ -304,7 +344,22 @@
     if (overviewReports) {
       overviewReports.replaceChildren();
       if (!data.documents.length) text(overviewReports, "p", "No reports uploaded yet.", "empty-copy");
-      for (const documentItem of data.documents.slice(0, 3)) overviewReports.append(reportRow(documentItem, false));
+      for (const documentItem of data.documents.slice(0, 3)) {
+        const row = document.createElement("div");
+        row.className = "ov-report";
+        const badge = document.createElement("span");
+        badge.className = "ov-icon";
+        badge.append(smallIcon("doc"));
+        row.append(badge);
+        const info = document.createElement("span");
+        info.className = "ov-grow";
+        text(info, "strong", documentItem.name, "ov-ellipsis");
+        text(info, "small", shortDate(documentItem.created_at), "muted");
+        row.append(info);
+        text(row, "span", documentItem.reviewed ? "Confirmed" : "Needs review",
+          `ov-badge ${documentItem.reviewed ? "ok" : "warn"}`);
+        overviewReports.append(row);
+      }
     }
     renderHistory(data.history);
   };

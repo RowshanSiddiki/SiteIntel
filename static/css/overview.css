@@ -1,0 +1,37 @@
+.ov-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }
+.ov-card { display: grid; align-content: space-between; gap: 10px; min-height: 112px; padding: 16px 18px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); color: var(--ink); text-decoration: none; transition: border-color .15s, transform .15s; }
+a.ov-card:hover { border-color: var(--lime); transform: translateY(-1px); }
+.ov-card-title { color: var(--muted); font-size: .82rem; }
+.ov-card-value { font-size: clamp(1.5rem, 3vw, 2.05rem); letter-spacing: -.02em; line-height: 1.1; }
+.ov-none { color: var(--muted); }
+
+.ov-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }
+.ov-panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; min-height: 250px; min-width: 0; }
+.ov-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.ov-head h2 { margin: 0; font-size: .95rem; }
+.ov-all { display: inline-flex; align-items: center; gap: 4px; color: var(--lime); font-size: .8rem; font-weight: 600; text-decoration: none; }
+
+.ov-report, .history-item { display: flex; align-items: center; gap: 12px; padding: 11px 0; }
+.ov-report + .ov-report, .history-item + .history-item { border-top: 1px solid var(--line); }
+.ov-icon { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 10px; background: #181f31; color: var(--lime); }
+.ov-grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: .86rem; }
+.history-item .ov-grow { flex-direction: row; align-items: baseline; gap: 0; white-space: nowrap; overflow: hidden; }
+.ov-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history-item small { color: var(--muted); font-size: .8rem; }
+.ov-report small, .history-item time { color: var(--muted); font-size: .76rem; }
+.ov-badge { flex: none; padding: 3px 9px; border-radius: 999px; font-size: .72rem; font-weight: 600; }
+.ov-badge.ok { color: var(--lime); background: #1b2415; }
+.ov-badge.warn { color: #ffbf72; background: #2a2114; }
+
+.ov-quick { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; }
+.ov-quick a { display: grid; align-content: space-between; gap: 18px; min-height: 76px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; color: var(--ink); font-size: .8rem; font-weight: 600; text-decoration: none; }
+.ov-quick a svg { color: var(--lime); }
+.ov-quick a:hover { border-color: var(--lime); }
+
+@media (max-width: 1100px) { .ov-quick { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 760px) {
+  .ov-cards, .ov-grid { grid-template-columns: 1fr; }
+  .ov-card { min-height: 84px; gap: 6px; }
+  .ov-panel { min-height: 0; }
+  .ov-quick { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

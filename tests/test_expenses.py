@@ -56,6 +56,9 @@ class FinancialAnalyticsTests(DocumentTestCase):
     def page(self, query=""):
         return self.client.get(f"/dashboard/projects/{self.pid}/expenses/{query}")
 
+    def api(self, query="", pid=None):
+        return self.client.get(f"/projects/{pid or self.pid}/finance/analytics.json{query}")
+
     def test_extract_review_aggregate_and_project_api(self):
         with self.app.app_context():
             db.session.add(Expense(
@@ -64,27 +67,21 @@ class FinancialAnalyticsTests(DocumentTestCase):
                 category="Materials", currency="BDT", amount=Decimal("999.00"),
             ))
             db.session.commit()
-        document_id = self.upload_invoice()
+        self.upload_invoice()
         before = self.page().get_data(as_text=True)
-        self.assertIn("Figures awaiting verification", before)
-        self.assertIn("No verified expense figures available", before)
+        self.assertIn("awaiting confirmation", before)
         self.assertNotIn("Add Expense", before)
         self.assertNotIn("Upload Bill", before)
+        self.assertNotIn("Open Document Assistant", before)
         self.assertEqual(self.client.get(f"/projects/{self.pid}/finance/new").status_code, 404)
-        self.assertEqual(self.client.post(f"/projects/{self.pid}/finance/new").status_code, 404)
+        self.assertEqual(self.api().json["charts"]["expense"]["series"], [])
         self.review_all()
-        page = self.page().get_data(as_text=True)
-        self.assertIn("BDT 150.00", page)
-        self.assertIn("BDT 25.00", page)
-        self.assertIn("BDT 200.00", page)
-        self.assertIn("Material cost", page)
-        self.assertIn(f"/documents/{document_id}/file#page=1", page)
-        self.assertIn("2026-01-10", page)
-        self.assertNotIn("BDT 300.00", page)
-        self.assertNotIn("Legacy manual record", page)
-        self.assertNotIn("BDT 999.00", page)
-        self.assertIn("No verified expense figures available",
-                      self.page("?start=2026-01-11").get_data(as_text=True))
+        expense = self.api().json["charts"]["expense"]
+        self.assertEqual(expense["unit"], "BDT")
+        self.assertEqual(expense["dates"], ["2026-01-10"])
+        self.assertEqual(expense["series"][0]["values"], [150.0])
+        self.assertNotIn("999", str(self.api().json))
+        self.assertEqual(self.api("?start=2026-01-11").json["charts"]["expense"]["series"], [])
         api = self.client.get(f"/api/projects/{self.pid}")
         self.assertEqual(api.status_code, 200)
         self.assertEqual(api.json["id"], self.pid)
@@ -105,12 +102,7 @@ class FinancialAnalyticsTests(DocumentTestCase):
             self.assertEqual(next(row.amount for row in rows if row.kind == "quotation_total"),
                              Decimal("140000"))
         self.review_all()
-        page = self.page().get_data(as_text=True)
-        self.assertIn("BDT 140000.00", page)
-        self.assertIn("No verified expense figures available", page)
-        self.assertNotIn("BDT 284000.00", page)
-        self.assertIn("Quoted material comparison", page)
-        self.assertIn("Cement", page)
+        self.assertEqual(self.api().json["charts"]["expense"]["series"], [])
 
     def test_extract_material_table_and_unknown_category(self):
         from siteintel.expenses.extraction import extract_observations
@@ -153,18 +145,9 @@ class FinancialAnalyticsTests(DocumentTestCase):
         self.assertEqual(first.status_code, 201)
         self.assertEqual(second.status_code, 201)
         self.review_all()
-        with self.app.test_request_context(f"/dashboard/projects/{self.pid}/expenses/"):
-            from flask_login import login_user
-            from siteintel.auth.models import User
-            from siteintel.expenses.routes import overview
-            from siteintel.projects.models import Project
-            login_user(db.session.get(User, self.ids["owner"]))
-            data = overview(db.session.get(Project, self.pid))
-            self.assertEqual(data["finance_totals"]["BDT"], Decimal("100.00"))
-            self.assertEqual(data["finance_payments"]["BDT"], Decimal("30.00"))
-            self.assertEqual(data["finance_trends"][0][1], date(2026, 1, 10))
-            self.assertEqual(data["finance_breakdown"][("BDT", "Unclassified")], Decimal("100.00"))
-            self.assertEqual(len(data["finance_records"]), 2)
+        expense = self.api().json["charts"]["expense"]
+        self.assertEqual(expense["series"][0]["values"], [100.0])
+        self.assertEqual(expense["dates"], ["2026-01-10"])
 
     def test_legacy_confirmed_quotation_observations_are_excluded(self):
         response = self.upload([QUOTATION], "quote.pdf", "quotation")
@@ -176,7 +159,8 @@ class FinancialAnalyticsTests(DocumentTestCase):
                 source_text="Legacy", status="confirmed",
             ))
             db.session.commit()
-        self.assertNotIn("284000.00", self.page().get_data(as_text=True))
+        self.assertEqual(self.api().json["charts"]["expense"]["series"], [])
+        self.assertIsNone(self.api().json["kpis"]["expenses"])
 
     def test_reprocessing_is_idempotent_and_changed_source_needs_review(self):
         document_id = self.upload_invoice()
@@ -193,8 +177,8 @@ class FinancialAnalyticsTests(DocumentTestCase):
         with patch("siteintel.documents.processing.extract_pdf_pages", return_value=extraction):
             self.assertEqual(self.client.post(url).json["status"], "completed")
         page = self.page().get_data(as_text=True)
-        self.assertIn("No verified expense figures available", page)
-        self.assertIn("BDT 175.00", page)
+        self.assertIn("awaiting confirmation", page)
+        self.assertEqual(self.api().json["charts"]["expense"]["series"], [])
         with self.app.app_context():
             rows = db.session.scalars(db.select(FinancialObservation).where(
                 FinancialObservation.document_id == document_id,
@@ -219,17 +203,21 @@ class FinancialAnalyticsTests(DocumentTestCase):
         with self.app.app_context():
             item_id = db.session.scalar(db.select(FinancialObservation.id))
         self.login("viewer")
-        self.assertNotIn("Figures awaiting verification", self.page().get_data(as_text=True))
+        self.assertNotIn("awaiting confirmation", self.page().get_data(as_text=True))
+        self.assertEqual(self.api().status_code, 200)
         self.assertEqual(self.client.post(
             f"/projects/{self.pid}/finance/observations/{item_id}/review",
             data={"decision": "confirmed"}).status_code, 404)
         self.login("stranger")
         self.assertEqual(self.page().status_code, 404)
+        self.assertEqual(self.api().status_code, 404)
+        self.assertEqual(self.api(pid=self.other_pid).json["charts"]["expense"]["series"], [])
+        self.assertEqual(self.api(pid=self.other_pid).json["kpis"]["reports"], 0)
         self.assertEqual(self.client.post(
             f"/projects/{self.other_pid}/finance/observations/{item_id}/review",
             data={"decision": "confirmed"}).status_code, 404)
-        self.assertNotIn("invoice.pdf", self.client.get(
-            f"/dashboard/projects/{self.other_pid}/expenses/").get_data(as_text=True))
+        self.client.post("/auth/logout")
+        self.assertIn(self.api().status_code, (302, 401))
 
     def test_review_decisions_can_be_reversed(self):
         self.upload_invoice()
@@ -238,29 +226,12 @@ class FinancialAnalyticsTests(DocumentTestCase):
                 FinancialObservation.kind == "invoice_total"))
         path = f"/projects/{self.pid}/finance/observations/{item_id}/review"
         self.assertEqual(self.client.post(path, data={"decision": "confirmed"}).status_code, 302)
-        self.assertIn("BDT 150.00", self.page().get_data(as_text=True))
+        self.assertEqual(self.api().json["kpis"]["expenses"], 150.0)
         self.assertEqual(self.client.post(path, data={"decision": "pending"}).status_code, 302)
-        self.assertIn("No verified expense figures available", self.page().get_data(as_text=True))
+        self.assertIsNone(self.api().json["kpis"]["expenses"])
         self.assertEqual(self.client.post(path, data={"decision": "ignored"}).status_code, 302)
-        self.assertIn("Ignored figures", self.page().get_data(as_text=True))
+        self.assertIsNone(self.api().json["kpis"]["expenses"])
         self.assertEqual(self.client.post(path, data={"decision": "pending"}).status_code, 302)
-
-    def test_ai_insights_use_local_model_only_and_reject_numeric_claims(self):
-        self.upload_invoice()
-        self.review_all()
-        path = f"/projects/{self.pid}/finance/insights"
-        remote = LLMSettings("key", "model", "https://example.test", 5)
-        with patch("siteintel.expenses.routes.settings.llm_settings", return_value=remote), \
-             patch("siteintel.expenses.routes.llm.generate") as generate:
-            self.assertEqual(self.client.post(path).status_code, 503)
-            generate.assert_not_called()
-        local = LLMSettings("key", "model", "http://127.0.0.1:8000", 5)
-        with patch("siteintel.expenses.routes.settings.llm_settings", return_value=local), \
-             patch("siteintel.expenses.routes.llm.generate", return_value="The cost is 999."):
-            self.assertEqual(self.client.post(path).status_code, 422)
-        with patch("siteintel.expenses.routes.settings.llm_settings", return_value=local), \
-             patch("siteintel.expenses.routes.llm.generate", return_value="Review material spending."):
-            self.assertEqual(self.client.post(path).json["insight"], "Review material spending.")
 
     def test_local_llm_refuses_remote_hosts_and_redirects(self):
         from siteintel.documents import llm

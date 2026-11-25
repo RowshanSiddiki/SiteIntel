@@ -24,18 +24,58 @@ SYSTEM_PROMPT = (
     "For document-search results, cite the source number in square brackets, "
     "such as [1], and do not invent a citation. Keep financial amounts and "
     "currencies exactly as returned, and distinguish expense records from "
-    "document-derived figures."
+    "document-derived figures. When a tool result contains a condensed_notice, "
+    "summarize the facts that are present, say that some detail was omitted, and "
+    "never ask the user to narrow the date range unless they requested exact "
+    "details for a specific period. For progress or status summaries, call "
+    "generate_project_summary first."
 )
 
 
+# (maximum list items, maximum string characters), tried from most to least detailed.
+_CONDENSE_LEVELS = ((20, 600), (10, 300), (6, 200), (3, 120), (2, 80))
+
+
+def _condense(value, max_items: int, max_chars: int):
+    """Trim lists and long strings while keeping numbers, dates and structure."""
+    if isinstance(value, str):
+        return value if len(value) <= max_chars else value[:max_chars] + "…"
+    if isinstance(value, list):
+        kept = [_condense(item, max_items, max_chars) for item in value[:max_items]]
+        if len(value) > max_items:
+            kept.append({"omitted_items": len(value) - max_items})
+        return kept
+    if isinstance(value, dict):
+        return {key: _condense(item, max_items, max_chars) for key, item in value.items()}
+    return value
+
+
+def _encoded_size(result) -> int:
+    return len(json.dumps(result, ensure_ascii=False, separators=(",", ":")))
+
+
 def _bounded_tool_result(result: dict) -> dict:
-    encoded = json.dumps(result, ensure_ascii=False, separators=(",", ":"))
-    if len(encoded) > MAX_TOOL_RESULT_CHARS:
-        return {
-            "status": "result_too_large",
-            "message": "The result exceeded the safe context limit. Narrow the date range or request fewer records.",
-        }
-    return result
+    """Return the result unchanged, or a condensed copy that fits the context budget."""
+    if _encoded_size(result) <= MAX_TOOL_RESULT_CHARS:
+        return result
+    for max_items, max_chars in _CONDENSE_LEVELS:
+        condensed = _condense(result, max_items, max_chars)
+        condensed["condensed_notice"] = (
+            "Large result automatically condensed: long text and extra records were "
+            "omitted. Summarize the available facts and state that details were omitted; "
+            "do not ask the user to narrow the date range."
+        )
+        if _encoded_size(condensed) <= MAX_TOOL_RESULT_CHARS:
+            return condensed
+    return {
+        "status": "result_condensed",
+        "message": "The result was too large to include; only its top-level counts are available.",
+        "available_fields": {
+            key: value for key, value in result.items()
+            if isinstance(value, (int, float, bool)) or value is None
+        },
+        "available_sections": [key for key, value in result.items() if isinstance(value, (list, dict))],
+    }
 
 
 def _tool_message(call_id: str, result: dict) -> dict:
@@ -108,8 +148,6 @@ def run_agent(project_id: int, question: str, history: list[dict] | None = None)
             else:
                 status = "completed"
             bounded_result = _bounded_tool_result(result)
-            if bounded_result is not result:
-                status = "result_too_large"
             events.append({
                 "name": call.name,
                 "label": label,

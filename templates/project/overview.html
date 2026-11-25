@@ -1,41 +1,25 @@
 {% extends "project/base.html" %}
 {% from "_icons.html" import icon %}
 {% block section %}
-<div class="overview-grid">
-  <section class="panel">
-    <div class="panel-head"><h2>Project information</h2></div>
-    <dl class="info-list">
-      <div><dt>Status</dt><dd>{{ status_labels.get(project.status, project.status) }}</dd></div>
-      <div><dt>Location</dt><dd>{{ project.location or "Not set" }}</dd></div>
-      <div><dt>Created</dt><dd>{{ project.created_at.strftime("%b %d, %Y") }}</dd></div>
-      {% if progress is not none %}<div><dt>Progress</dt><dd>{{ progress|round(0)|int }}% complete</dd></div>{% endif %}
-    </dl>
-    <p class="muted">{{ project.description or "No project summary yet. Add one in Project Settings." }}</p>
-  </section>
+<div id="overview-predictions" class="ov-cards" data-href="{{ url_for('dashboard.project_section', project_id=project.id, section='ml-predictions') }}" aria-label="ML predictions">
+  <span class="ov-card"><span class="muted">Loading…</span></span>
+</div>
 
-  <section class="panel">
-    <div class="panel-head"><h2>Latest ML predictions</h2><a class="text-link" href="{{ url_for('dashboard.project_section', project_id=project.id, section='ml-predictions') }}">View all</a></div>
-    <div id="overview-predictions"><p class="empty-copy">Loading…</p></div>
-  </section>
-
-  <section class="panel">
-    <div class="panel-head"><h2>Recent reports</h2><a class="text-link" href="{{ url_for('dashboard.project_section', project_id=project.id, section='reports') }}">View all</a></div>
+<div class="ov-grid">
+  <section class="ov-panel">
+    <div class="ov-head"><h2>Reports</h2><a class="ov-all" href="{{ url_for('dashboard.project_section', project_id=project.id, section='reports') }}">View all {{ icon("arrow-right", 14) }}</a></div>
     <div id="overview-reports"><p class="empty-copy">Loading…</p></div>
   </section>
-
-  <section class="panel">
-    <div class="panel-head"><h2>Recent activity</h2></div>
+  <section class="ov-panel">
+    <div class="ov-head"><h2>Activity</h2></div>
     <div id="history-content"><p class="empty-copy">Loading…</p></div>
   </section>
 </div>
 
-<section class="panel">
-  <div class="panel-head"><h2>Quick access</h2></div>
-  <div class="module-tiles module-tiles-wide">
-    {% for slug, (label, glyph, _template) in sections.items() if slug != 'settings' %}
-    <a href="{{ url_for('dashboard.project_section', project_id=project.id, section=slug) }}">{{ icon(glyph, 20) }}<span>{{ label }}</span></a>
-    {% endfor %}
-  </div>
-</section>
+<nav class="ov-quick" aria-label="Quick access">
+  {% for slug, label, glyph in [('reports', 'Reports', 'file-text'), ('report-builder', 'Report Builder', 'dashboard'), ('ml-predictions', 'ML Predictions', 'chart'), ('expenses', 'Expenses & Bills', 'wallet'), ('document-assistant', 'Document Assistant', 'file-search'), ('ai-agent', 'AI Agent', 'bot'), ('communication', 'Email & Communication', 'mail')] %}
+  <a href="{{ url_for('dashboard.project_section', project_id=project.id, section=slug) }}">{{ icon(glyph, 20) }}<span>{{ label }}</span></a>
+  {% endfor %}
+</nav>
 {% endblock %}
-{% block page_scripts %}<script defer src="{{ url_for('static', filename='js/report.js', v='20261119-loading-fix') }}"></script>{% endblock %}
+{% block page_scripts %}<link rel="stylesheet" href="{{ url_for('static', filename='css/overview.css') }}"><script defer src="{{ url_for('static', filename='js/report.js', v='20261124-overview') }}"></script>{% endblock %}

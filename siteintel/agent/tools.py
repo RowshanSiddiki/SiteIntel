@@ -121,7 +121,7 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "generate_project_summary",
-            "description": "Gather current project, recent report, saved prediction, and expense facts for a grounded summary.",
+            "description": "Gather a condensed progress digest (daily reports and latest changes), saved predictions, and expense totals. Use for progress or status summaries; no date range is needed.",
             "parameters": {
                 "type": "object",
                 "properties": {},
@@ -660,6 +660,75 @@ def _compare_progress(project_id: int, arguments: dict) -> dict:
     }
 
 
+def _report_progress(project_id: int) -> dict:
+    """Condense generated daily reports into a bounded progress digest."""
+    base = db.select(DailyConstructionReport).where(
+        DailyConstructionReport.project_id == project_id
+    )
+    total = db.session.scalar(db.select(func.count()).select_from(base.subquery()))
+    first_date, last_date = db.session.execute(
+        db.select(
+            func.min(DailyConstructionReport.reporting_date),
+            func.max(DailyConstructionReport.reporting_date),
+        ).where(DailyConstructionReport.project_id == project_id)
+    ).one()
+    recent = db.session.scalars(
+        base.order_by(DailyConstructionReport.reporting_date.desc()).limit(5)
+    ).all()
+    digest = {
+        "total_reports": total,
+        "first_report_date": first_date.isoformat() if first_date else None,
+        "latest_report_date": last_date.isoformat() if last_date else None,
+        "recent_reports": [],
+    }
+    for report in recent:
+        flat = _flatten_report(report.fields)
+        digest["recent_reports"].append({
+            "reporting_date": report.reporting_date.isoformat(),
+            "summary_text": (report.report_text or "")[:500],
+            "key_fields": {k: v[:200] for k, v in list(flat.items())[:10]},
+            "field_count": len(flat),
+        })
+    if len(recent) >= 2:
+        latest, previous = _flatten_report(recent[0].fields), _flatten_report(recent[1].fields)
+        digest["latest_changes"] = {
+            "from_date": recent[1].reporting_date.isoformat(),
+            "to_date": recent[0].reporting_date.isoformat(),
+            "changed": [
+                {"field": key, "from": previous[key][:200], "to": latest[key][:200]}
+                for key in sorted(previous.keys() & latest.keys())
+                if previous[key] != latest[key]
+            ][:10],
+            "added": [
+                {"field": key, "value": latest[key][:200]}
+                for key in sorted(latest.keys() - previous.keys())
+            ][:10],
+        }
+    return digest
+
+
+def _project_summary(project_id: int) -> dict:
+    expenses = _expense_summary(project_id, {})
+    return {
+        "project": _project_overview(project_id),
+        "progress": _report_progress(project_id),
+        "current_predictions": [
+            {
+                "model_name": item["model_name"],
+                "model_key": item.get("model_key"),
+                "result": item.get("result"),
+            }
+            for item in _ml_predictions(project_id, {})["predictions"][:6]
+        ],
+        "expenses": {
+            key: expenses[key] for key in (
+                "expense_totals", "expense_status_counts",
+                "uploaded_bill_payment_counts", "confirmed_document_financial_totals",
+            )
+        },
+    }
+
+
 def execute_tool(project_id: int, name: str, arguments: Any) -> dict:
     """Validate a model-requested tool call and execute one read-only action."""
     arguments = _validated_args(name, arguments)
@@ -676,10 +745,5 @@ def execute_tool(project_id: int, name: str, arguments: Any) -> dict:
     if name == "compare_project_progress":
         return _compare_progress(project_id, arguments)
     if name == "generate_project_summary":
-        return {
-            "project": _project_overview(project_id),
-            "recent_reports": _daily_reports(project_id, {"limit": 5})["reports"],
-            "current_predictions": _ml_predictions(project_id, {})["predictions"],
-            "expenses": _expense_summary(project_id, {}),
-        }
+        return _project_summary(project_id)
     raise ToolArgumentError("This agent tool is not available.")

@@ -62,7 +62,7 @@ class Citation:
 class AnswerResult:
     question: str
     answer: str
-    status: str  # answered | no_answer | no_documents
+    status: str  # answered | no_answer | no_documents | not_indexed
     mode: str  # llm | extractive | none
     citations: list[Citation] = field(default_factory=list)
     notice: str | None = None
@@ -138,6 +138,15 @@ def answer_project_question(
     search: SearchResult = search_project_documents(
         project_id, question, top_k=top_k, document_ids=document_ids
     )
+    if search.unindexed_documents and not search.sufficient:
+        names = ", ".join(search.unindexed_documents[:3])
+        return AnswerResult(
+            question,
+            f"{names} was found in this project, but its text has not been indexed, so it "
+            "cannot be searched yet. Wait for processing to finish or re-upload it as a "
+            "knowledge document.",
+            "not_indexed", "none",
+        )
     if search.indexed_documents == 0:
         return AnswerResult(question, NO_DOCUMENTS, "no_documents", "none")
     if not search.sufficient:

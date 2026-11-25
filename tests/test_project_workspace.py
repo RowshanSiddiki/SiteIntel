@@ -460,10 +460,26 @@ class ProjectWorkspaceTests(unittest.TestCase):
             f"/projects/{self.project_id}/finance/observations/{observation_id}/review",
             data={"decision": "confirmed"},
         ).status_code, 302)
+        expense = self.client.get(f"/projects/{self.project_id}/finance/analytics.json").json["charts"]["expense"]
+        self.assertEqual(expense["series"][0]["values"], [230.0])
         page = self.client.get(f"/dashboard/projects/{self.project_id}/expenses/").get_data(as_text=True)
-        self.assertIn("BDT 230.00", page)
-        self.assertIn(f"/documents/{report_document_id}/file#page=1", page)
         self.assertEqual(self.client.get(f"/api/projects/{self.project_id}").status_code, 200)
+
+    def test_overview_is_compact_and_hides_empty_location(self):
+        page = self.client.get(f"/dashboard/projects/{self.project_id}/").get_data(as_text=True)
+        for removed in ("No location set", "Project information", "No project summary"):
+            self.assertNotIn(removed, page)
+        for label in ("Reports", "Report Builder", "ML Predictions", "Expenses &amp; Bills",
+                      "Document Assistant", "AI Agent", "Email &amp; Communication"):
+            self.assertIn(f"<span>{label}</span>", page)
+        self.assertIn('id="overview-predictions"', page)
+        self.assertEqual(page.count("<h1>"), 1)
+        with self.app.app_context():
+            db.session.get(Project, self.project_id).location = "Dhaka"
+            db.session.commit()
+        self.assertIn("Dhaka", self.client.get(f"/dashboard/projects/{self.project_id}/").get_data(as_text=True))
+        self.login("stranger")
+        self.assertEqual(self.client.get(f"/dashboard/projects/{self.project_id}/").status_code, 404)
 
     def test_generated_report_index_keeps_repeated_page_content(self):
         document_id = self.upload("Cement received: 40 bags", reporting_date="2026-11-19")

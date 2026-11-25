@@ -421,6 +421,108 @@ class AgentTests(unittest.TestCase):
         ])
         self.assertEqual(generate.call_count, 3)
 
+    def add_progress_reports(self, count, items_per_section=30):
+        for day in range(1, count + 1):
+            document = self.add_document(name=f"daily-{day}.pdf")
+            db.session.add(DailyConstructionReport(
+                project_id=self.project_id,
+                reporting_date=date(2026, 11, day),
+                created_by_id=self.user_ids["owner"],
+                document_id=document.id,
+                fields={"sections": [{"name": "Work", "items": [
+                    {"label": f"Task {index}", "value": f"Day {day} progress {'x' * 400}"}
+                    for index in range(items_per_section)
+                ]}]},
+                report_text=f"Day {day} report. " + "Concrete work completed. " * 200,
+            ))
+        db.session.commit()
+
+    def test_progress_summary_combines_reports_within_context_limit(self):
+        from siteintel.agent.service import MAX_TOOL_RESULT_CHARS, _bounded_tool_result
+
+        with self.app.app_context():
+            self.add_progress_reports(12)
+            result = execute_tool(self.project_id, "generate_project_summary", {})
+        progress = result["progress"]
+        self.assertEqual(progress["total_reports"], 12)
+        self.assertEqual(progress["first_report_date"], "2026-11-01")
+        self.assertEqual(progress["latest_report_date"], "2026-11-12")
+        self.assertEqual(len(progress["recent_reports"]), 5)
+        self.assertEqual(progress["latest_changes"]["to_date"], "2026-11-12")
+        self.assertTrue(progress["latest_changes"]["changed"])
+        self.assertEqual(result["project"]["name"], "Agent project")
+        self.assertEqual(_bounded_tool_result(result), result)
+        self.assertLess(len(json.dumps(result)), MAX_TOOL_RESULT_CHARS)
+
+    def test_oversized_tool_result_is_condensed_not_rejected(self):
+        from siteintel.agent.service import MAX_TOOL_RESULT_CHARS, _bounded_tool_result
+
+        huge = {
+            "total_matching": 500,
+            "reports": [
+                {"reporting_date": f"2026-01-{i % 28 + 1:02d}", "report_text": "x" * 5000}
+                for i in range(100)
+            ],
+        }
+        bounded = _bounded_tool_result(huge)
+        self.assertLessEqual(len(json.dumps(bounded, ensure_ascii=False)), MAX_TOOL_RESULT_CHARS)
+        self.assertNotEqual(bounded.get("status"), "result_too_large")
+        self.assertEqual(bounded["total_matching"], 500)
+        self.assertEqual(bounded["reports"][0]["reporting_date"], "2026-01-01")
+        self.assertIn("condensed_notice", bounded)
+        self.assertEqual(huge["reports"][0]["report_text"], "x" * 5000)
+
+    def test_normal_tool_result_is_passed_through_unchanged(self):
+        from siteintel.agent.service import _bounded_tool_result
+
+        small = {"name": "Project", "reports": [{"reporting_date": "2026-11-01"}]}
+        self.assertIs(_bounded_tool_result(small), small)
+
+    def test_progress_question_gets_an_answer_with_oversized_data(self):
+        responses = [
+            ToolResponse(None, [ToolCall("summary-1", "generate_project_summary", {})]),
+            ToolResponse(None, [ToolCall("reports-1", "get_daily_reports", {"limit": 10})]),
+            ToolResponse("Progress covers 12 daily reports; some detail was omitted.", []),
+        ]
+        with self.app.app_context():
+            self.add_progress_reports(12)
+        with patch("siteintel.agent.service.settings.llm_settings", return_value=object()), \
+             patch("siteintel.agent.service.llm.generate_with_tools", side_effect=responses) as generate:
+            response = self.post_chat({"message": "Tell me the progress summary"})
+
+        self.assertEqual(response.status_code, 200, response.json)
+        self.assertIn("12 daily reports", response.json["message"]["content"])
+        statuses = [action["status"] for action in response.json["message"]["actions"]]
+        self.assertEqual(statuses, ["completed", "completed"])
+        tool_messages = [
+            message for message in generate.call_args_list[-1].args[1] if message["role"] == "tool"
+        ]
+        for message in tool_messages:
+            self.assertNotIn("result_too_large", message["content"])
+            self.assertLessEqual(len(message["content"]), 30000)
+
+    def test_progress_summary_states_when_no_reports_exist(self):
+        with self.app.app_context():
+            result = execute_tool(self.project_id, "generate_project_summary", {})
+        self.assertEqual(result["progress"]["total_reports"], 0)
+        self.assertIsNone(result["progress"]["latest_report_date"])
+        self.assertEqual(result["progress"]["recent_reports"], [])
+
+    def test_progress_summary_is_isolated_to_its_project(self):
+        with self.app.app_context():
+            self.add_progress_reports(2)
+            other = self.add_document(name="other.pdf")
+            other.project_id = self.other_project_id
+            db.session.add(DailyConstructionReport(
+                project_id=self.other_project_id, reporting_date=date(2026, 12, 1),
+                created_by_id=self.user_ids["stranger"], document_id=other.id,
+                fields={"sections": []}, report_text="PRIVATE",
+            ))
+            db.session.commit()
+            result = execute_tool(self.project_id, "generate_project_summary", {})
+        self.assertEqual(result["progress"]["total_reports"], 2)
+        self.assertNotIn("PRIVATE", json.dumps(result))
+
     def test_invalid_tool_arguments_are_rejected(self):
         with self.app.app_context():
             with self.assertRaises(ToolArgumentError):

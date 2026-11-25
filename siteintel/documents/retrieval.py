@@ -53,6 +53,8 @@ class SearchResult:
     chunks: list[SourceChunk] = field(default_factory=list)
     indexed_documents: int = 0
     sufficient: bool = False
+    # Documents named in the question that exist but have no searchable text.
+    unindexed_documents: list[str] = field(default_factory=list)
 
 
 def _excerpt(text: str, question_terms: set[str]) -> str:
@@ -100,12 +102,53 @@ def _query_text_and_dates(question: str) -> tuple[str, set[date]]:
     return _QUESTION_FILLER.sub(" ", _DATE.sub(remove_date, question)), dates
 
 
+_NAME_FILLER = frozenset({"me", "my", "us"})
+_EXTENSION = re.compile(r"\.[A-Za-z0-9]{2,5}$")
+
+
+def _name_terms(text: str) -> set[str]:
+    return {term for term in tokenize(text) if term not in _NAME_FILLER}
+
+
+def _named_documents(project_id: int, query_text: str) -> list[tuple[int, str, set[str]]]:
+    """Project documents whose file name the question refers to.
+
+    A document matches when every searchable word of the question appears in
+    its name (a partial title) or the whole name appears in the question.
+    """
+    wanted = _name_terms(query_text)
+    if not any(term.isalpha() for term in wanted):
+        return []
+    matches = []
+    for doc_id, file_name in db.session.execute(
+        db.select(Document.id, Document.file_name).where(Document.project_id == project_id)
+    ):
+        name = _name_terms(_EXTENSION.sub("", file_name))
+        if name and (wanted <= name or name <= wanted):
+            matches.append((doc_id, file_name, name))
+    return matches
+
+
+def _leading_chunks(rows, top_k: int) -> list[SourceChunk]:
+    ordered = sorted(rows, key=lambda row: (row.document_id, row.page_number, row.id))
+    return [
+        SourceChunk(
+            chunk_id=row.id, document_id=row.document_id, document_name=row.file_name,
+            category=row.category, page_number=row.page_number, text=row.text,
+            excerpt=_excerpt(row.text, set()), score=1.0, coverage=1.0,
+            reporting_date=row.reporting_date.isoformat() if row.reporting_date else None,
+        )
+        for row in ordered[:top_k]
+    ]
+
+
 def search_project_documents(
     project_id: int,
     question: str,
     *,
     top_k: int = 5,
     document_ids: list[int] | None = None,
+    _by_name: bool = True,
 ) -> SearchResult:
     """Rank the project's indexed passages against ``question``."""
     result = SearchResult(question=question)
@@ -133,10 +176,40 @@ def search_project_documents(
         query = query.where(DocumentChunk.document_id.in_(document_ids))
     rows = db.session.execute(query).all()
     result.indexed_documents = len({row.document_id for row in rows})
-    if not rows or top_k <= 0:
+    if top_k <= 0:
         return result
 
     query_text, requested_dates = _query_text_and_dates(question)
+    if _by_name and not requested_dates:
+        named = _named_documents(project_id, query_text)
+        if document_ids:
+            named = [item for item in named if item[0] in document_ids]
+        indexed_ids = {row.document_id for row in rows}
+        result.unindexed_documents = sorted(
+            {name for doc_id, name, _ in named if doc_id not in indexed_ids}
+        )
+        named_ids = [doc_id for doc_id, _, _ in named if doc_id in indexed_ids]
+        if named_ids:
+            title_words = set().union(*(terms for doc_id, _, terms in named if doc_id in indexed_ids))
+            remainder = " ".join(
+                word for word in re.findall(r"[A-Za-z0-9][\w.\-/]*", query_text)
+                if not (_name_terms(word) <= title_words)
+            )
+            if _name_terms(remainder):
+                narrowed = search_project_documents(
+                    project_id, remainder, top_k=top_k, document_ids=named_ids, _by_name=False
+                )
+                if narrowed.sufficient:
+                    narrowed.question = question
+                    narrowed.unindexed_documents = result.unindexed_documents
+                    return narrowed
+            result.chunks = _leading_chunks(
+                [row for row in rows if row.document_id in named_ids], top_k
+            )
+            result.sufficient = True
+            return result
+    if not rows:
+        return result
     summary_terms = set(tokenize(query_text))
     summary_vocabulary = set(tokenize(" ".join(_SUMMARY_WORDS)))
     is_summary = bool(summary_terms) and summary_terms <= summary_vocabulary and bool(
